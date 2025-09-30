@@ -1,2 +1,2 @@
 # EpidemicSimulationSandbox
-Passion Project for Advanced Computer Scienc at Mass Academy of Math and Science
+Passion Project for Advanced Computer Science at Mass Academy of Math and Science
