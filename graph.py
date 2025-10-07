@@ -39,7 +39,6 @@ def connect_neighbors(G,n):
 
     return H
 
-    return H
 def add_node_with_connections(G, num_connections=3):
     """
     Add a new node to graph G with 'num_connections' random edges
@@ -66,11 +65,27 @@ def add_node_with_connections(G, num_connections=3):
         H.add_edge(new_node, t)
 
     return H
-def pyvis_from_nx(G, title="Graph", height="500px", width="100%"):
+
+def weighted_random_size(min_size=10, max_size=50):
     """
-    Create a pyvis Network from a networkx graph.
-    Labels each node with its ID shown on the node.
+    Generate random node sizes with bias toward smaller values but more medium/large.
+    Uses a mixture of exponential and uniform distributions.
     """
+    # 60% chance of small nodes (exponential distribution)
+    # 40% chance of medium/large nodes (uniform distribution)
+    if random.random() < 0.98:
+        # Exponential for small sizes
+        lambda_param = 0.15
+        random_value = random.expovariate(lambda_param)
+        size = min_size + random_value
+        size = min(size, 40)  # cap small nodes at 30
+    else:
+        # Uniform distribution for medium to large sizes
+        size = random.uniform(30, 40)
+    
+    return int(size)
+
+def pyvis_from_nx(G, title="Graph", height="100vh", width="100%"):
     net = Network(
         notebook=False,
         height=height,
@@ -79,28 +94,30 @@ def pyvis_from_nx(G, title="Graph", height="500px", width="100%"):
         font_color="black"
     )
 
-    # Add nodes with centered labels
+    # Add nodes with weighted random sizes (favoring smaller sizes)
     for node in G.nodes():
+        node_size = weighted_random_size(10, 50)
         net.add_node(
             node,
-            label=str(node),
-            shape="circle",             
-            font={"multi": "html", "vadjust": 0} 
+            label=str(node_size),   # show size as label
+            size=node_size,         # fixed diameter
+            title=f"Node {node} size {node_size}",
+            font={
+                "size": 16,
+                "color": "black",
+                "vadjust": 0  # vertical adjustment - 0 centers it on the node
+            }
         )
 
     # Add edges
     for u, v in G.edges():
         net.add_edge(u, v)
 
-    # Disable edge smoothing (make lines stay straight when dragging)
+    # Disable physics completely
     net.set_options("""
     {
-      "edges": {
-        "smooth": false
-      },
-      "physics": {
-        "enabled": false
-      }
+      "physics": { "enabled": false },
+      "edges": { "smooth": false }
     }
     """)
 
@@ -111,11 +128,8 @@ def write_multi_graph_html(graphs, out_index="index.html", columns_per_row=1):
     graphs : list of dicts with keys 'file', 'title', 'edges'
     """
     panes_html = ""
-    labels_html = ""
-
     for i, g in enumerate(graphs):
-        panes_html += f'<div class="pane-container"><iframe width="100%" class="pane" src="{g["file"]}" title="{g["title"]}"></iframe></div>\n'
-        labels_html += f'<div class="label">{g["title"]} — Edges: {g["edges"]}</div>\n'
+        panes_html += f'<iframe src="{g["file"]}" title="{g["title"]}" style="border:none; width:100%; height:100vh;"></iframe>\n'
 
     html = f"""<!doctype html>
 <html>
@@ -123,50 +137,25 @@ def write_multi_graph_html(graphs, out_index="index.html", columns_per_row=1):
     <meta charset="utf-8"/>
     <title>Graphs</title>
     <style>
-      body {{ margin:0; padding:0; font-family: Arial, sans-serif; }}
-      .labels {{
-        display: grid;
-        grid-template-columns: repeat({columns_per_row}, 1fr);
-        gap: 10px;
-        padding: 10px;
-        background-color: #f5f5f5;
-        border-bottom: 1px solid #ddd;
+      html, body {{
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
       }}
-      .label {{ 
-        padding: 6px 12px; 
-        font-weight: bold; 
-        text-align: center;
-        background-color: white;
-        border-radius: 4px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      }}
-      .container {{ 
-        display: grid;
-        grid-template-columns: repeat({columns_per_row}, 1fr);
-        grid-auto-rows: 500px;
-        gap: 10px;
-        padding: 10px;
-      }}
-      .pane-container {{
+      body {{
         display: flex;
         flex-direction: column;
-        width: 100%;
       }}
-      .pane {{ 
-        flex: 1;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      iframe {{
+        width: 100%;
+        height: 100vh; /* full viewport height */
+        border: none;
       }}
     </style>
   </head>
   <body>
-    <div class="labels">
-      {labels_html}
-    </div>
-    <div class="container">
-      {panes_html}
-    </div>
+    {panes_html}
   </body>
 </html>
 """
@@ -179,7 +168,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     os.chdir(out_dir)  # write files into this directory
 
-    num_nodes = 126
+    num_nodes = 150
     num_graphs = 1
 
     # 1) Create sequence of graphs
@@ -192,7 +181,7 @@ def main():
     graphDicts = []
     for i, G in enumerate(graphs):
         filename = f"graph_{i}.html"
-        net = pyvis_from_nx(G, title=f"Graph: {i}", height="500px", width="100%")
+        net = pyvis_from_nx(G, title=f"Graph: {i}", height="100vh", width="100%")
         net.write_html(filename)   # <--- important: write the per-graph HTML
         graphDicts.append({"file": filename, "title": f"{i}", "edges": G.number_of_edges()})
 
