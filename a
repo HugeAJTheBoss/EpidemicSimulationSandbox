@@ -1,0 +1,29 @@
+[33mcommit 880e6c7cc400f3ac3c6660668fe44444ae93e0c1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: ArnavPrabhudesai <aoprabhudesai@wpi.edu>
+Date:   Tue Oct 7 12:50:34 2025 -0400
+
+    0.0.3 Added nodes of different sizes
+
+[33mcommit 61caaf0522ac568a94c23f94ba7e924fede15867[m
+Author: ArnavPrabhudesai <aoprabhudesai@wpi.edu>
+Date:   Mon Oct 6 11:02:19 2025 -0400
+
+    0.0.2 Added Python to generate the graph
+
+[33mcommit 60f199c79461b66400be136c4d60a525bf5f163a[m
+Author: LordVanra <arnav.omkar@gmail.com>
+Date:   Mon Oct 6 10:48:36 2025 -0400
+
+    0.0.1 Added Graph System to Represent Population
+
+[33mcommit e57a3b1d165b44a0b69ec000517009843c87743e[m
+Author: Atharv Prathamesh Joshi <apjoshi@wpi.edu>
+Date:   Tue Sep 30 14:15:54 2025 -0400
+
+    Update README.md
+
+[33mcommit dacbe42c7aeaea9866dae9777b997708e6564a61[m
+Author: Atharv Prathamesh Joshi <apjoshi@wpi.edu>
+Date:   Tue Sep 30 14:04:12 2025 -0400
+
+    Initial commit
