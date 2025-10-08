@@ -66,7 +66,7 @@ def add_node_with_connections(G, num_connections=3):
 
     return H
 
-def weighted_random_size(min_size=10, max_size=50):
+def weighted_random_size(min_size=10, max_size=40):
     """
     Generate random node sizes with bias toward smaller values but more medium/large.
     Uses a mixture of exponential and uniform distributions.
@@ -78,7 +78,7 @@ def weighted_random_size(min_size=10, max_size=50):
         lambda_param = 0.15
         random_value = random.expovariate(lambda_param)
         size = min_size + random_value
-        size = min(size, 40)  # cap small nodes at 30
+        size = min(size, max_size)  # cap small nodes at 30
     else:
         # Uniform distribution for medium to large sizes
         size = random.uniform(30, 40)
@@ -96,7 +96,7 @@ def pyvis_from_nx(G, title="Graph", height="100vh", width="100%"):
 
     # Add nodes with weighted random sizes (favoring smaller sizes)
     for node in G.nodes():
-        node_size = weighted_random_size(10, 50)
+        node_size = weighted_random_size()
         net.add_node(
             node,
             label=str(node_size),   # show size as label
