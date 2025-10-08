@@ -1,0 +1,71 @@
+% Grid size
+rows = 50;
+cols = 50;
+
+% Create random population density
+mu = 5;       % average log scale
+sigma = 1;  % spread (higher = more extremes)
+population = round(lognrnd(mu, sigma, rows, cols));
+
+% Display population as heatmap
+[x, y] = meshgrid(1:cols, 1:rows);  % grid coordinates
+x = x(:);  % flatten to vectors
+y = y(:);
+pop = population(:);  % flatten population matrix
+
+sizeGrid = reshape(dotSizes, rows, cols) / 100; % scale down
+
+% Scale dot sizes
+dotSizes = pop;           % size proportional to population
+dotSizes = 1 + 300*dotSizes/max(dotSizes); % normalize for visibility
+
+% Plot
+figure;
+h = scatter(x, y, dotSizes, ones(length(x),3), 'filled'); % start white
+axis off;
+
+r = zeros(rows, cols);
+
+% Pick one random cell
+randRow = randi(rows)
+randCol = randi(cols)
+
+% Give it a small red value
+r(randRow-1:randRow+1, randCol-1:randCol+1) = 0.2;   % Starting Intensity
+
+% Animation loop
+while true
+    % Pad both red and size matrices for border handling
+    r_p = padarray(r, [1, 1], 'replicate');
+    s_p = padarray(sizeGrid, [1, 1], 'replicate');
+    
+    % Compute neighbor contributions
+    neighborSum = ...
+        0.5 * r_p(1:end-2, 1:end-2).*s_p(1:end-2, 1:end-2) + ...
+        r_p(1:end-2, 2:end-1).*s_p(1:end-2, 2:end-1) + ...
+        0.5 * r_p(1:end-2, 3:end).*s_p(1:end-2, 3:end) + ...
+        r_p(2:end-1, 1:end-2).*s_p(2:end-1, 1:end-2) + ...
+        2 * r_p(2:end-1, 2:end-1).*s_p(2:end-1, 2:end-1) + ...
+        r_p(2:end-1, 3:end).*s_p(2:end-1, 3:end) + ...
+        0.5 * r_p(3:end, 1:end-2).*s_p(3:end, 1:end-2) + ...
+        r_p(3:end, 2:end-1).*s_p(3:end, 2:end-1) + ...
+        0.5 * r_p(3:end, 3:end).*s_p(3:end, 3:end);
+
+    % Compute recovery
+    neighborAntiSum = r_p(2:end-1, 2:end-1).*s_p(2:end-1, 2:end-1);
+    
+    spreadRate = 0.2;
+    healRate = 0.5;
+
+    r = r + spreadRate * neighborSum .* (1 - r) - healRate .* neighborAntiSum;
+    
+    % Clamp to [0,1]
+    r = max(0, min(r, 1));
+    g = 1 - r;
+    b = r*0.0001;
+    
+    % Update scatter colors
+    h.CData = [r(:), g(:), b(:)];
+    drawnow;
+    pause(0.2);
+end
