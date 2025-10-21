@@ -1,11 +1,13 @@
-% Grid size
+% Population modifier
 ROWS = 50;
 COLS = 50;
 MU = 5;       % average log scale
 SIGMA = 1;  % spread (higher = more extremes)
+
+% Virus Modifiers
 SPREAD_RATE = 0.2;
-HEAL_RATE = 8;
-IMMUNITY_LOSS_RATE = 40;
+HEAL_RATE = 6;
+IMMUNITY_LOSS_RATE = 400;
 
 population = round(lognrnd(MU, SIGMA, ROWS, COLS));
 
@@ -17,9 +19,9 @@ pop = population(:);  % flatten population matrix
 
 % Scale dot sizes
 dotSizes = pop;           % size proportional to population
-dotSizes = 1 + 300*dotSizes/max(dotSizes); % normalize for visibility
+dotSizes = 1 + 100*dotSizes/max(dotSizes); % normalize for visibility
 
-sizeGrid = reshape(dotSizes, ROWS, COLS) / 100; % scale down
+sizeGrid = reshape(dotSizes, ROWS, COLS) / 67; % scale down
 
 % Plot
 figure;
@@ -34,8 +36,12 @@ b_history = zeros(ROWS, COLS, IMMUNITY_LOSS_RATE);
 randRow = randi(ROWS)
 randCol = randi(COLS)
 
-% Give it a small red value
-r(randRow-1:randRow+1, randCol-1:randCol+1) = 0.5;   % Starting Intensity
+rmax = min(randRow+1, ROWS);
+rmin = max(randRow-1, 1);
+cmax = min(randCol+1, COLS);
+cmin = max(randCol-1, 1);
+
+r(rmin:rmax, cmin:cmax) = 0.15; % Initial intensity
 
 b = zeros(ROWS, COLS);
 g = 1-r;
@@ -48,27 +54,25 @@ drawnow;
 while true
     r_history = cat(3, r, r_history(:,:,1:HEAL_RATE - 1));
     b_history = cat(3, b, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
-    iter = iter + 1;  
-
-    % Pad both red and size matrices for border handling
-    r_p = padarray(r, [1, 1], 'replicate');
-    s_p = padarray(sizeGrid, [1, 1], 'replicate');
+    iter = iter + 1;
     
     % Compute neighbor contributions
-    neighborSum = ...
-        2 * r_p(2:end-1, 2:end-1).*s_p(2:end-1, 2:end-1);
-        %0.5 * r_p(2:end-1, 3:end).*s_p(2:end-1, 3:end) + ...
-        %0.2 * r_p(3:end, 1:end-2).*s_p(3:end, 1:end-2) + ...
-        %0.5 * r_p(3:end, 2:end-1).*s_p(3:end, 2:end-1) + ...
-        %0.2 * r_p(3:end, 3:end).*s_p(3:end, 3:end);
+    kernel = [0.2 0.5 0.2; 
+              0.5 3.0 0.5; 
+              0.2 0.5 0.2];
+    kernel = [0 0 0; 
+              0 3.0 0; 
+              0 0 0];
+
+    neighborSum = conv2(r .* sizeGrid.^1.1, kernel, 'same');
 
     infected = SPREAD_RATE * neighborSum .* (1 - r - b);
-    healed = 0.8 .* (r_history(:,:,HEAL_RATE));
+    healed =  0.95 .* max(r_history(:,:,HEAL_RATE - 1) - r_history(:,:,HEAL_RATE), 0);
     
     % Update r and b
     r = r - healed;
     r = max(0, r);
-    b = b - r + r_history(:,:,1);
+    %b = b - r + r_history(:,:,1);
     b = min(b, 1);
     r = r + infected;
     r = min(r, 1);
