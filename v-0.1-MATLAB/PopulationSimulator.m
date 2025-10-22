@@ -5,9 +5,13 @@ MU = 5;       % average log scale
 SIGMA = 1;  % spread (higher = more extremes)
 
 % Virus Modifiers
-SPREAD_RATE = 0.2;
-HEAL_RATE = 6;
-IMMUNITY_LOSS_RATE = 400;
+SPREAD_RATE = 0.35;
+HEAL_RATE = 7;
+IMMUNITY_LOSS_RATE = 300;
+FATALITY_RATE = 0.01;
+SPREAD_KERNEL = [0.2 0.5 0.2; 
+          0.5 1.0 0.5; 
+          0.2 0.5 0.2];
 
 population = round(lognrnd(MU, SIGMA, ROWS, COLS));
 
@@ -23,65 +27,76 @@ dotSizes = 1 + 100*dotSizes/max(dotSizes); % normalize for visibility
 
 sizeGrid = reshape(dotSizes, ROWS, COLS) / 67; % scale down
 
+% Initialize data tools
+rowsX = h.DataTipTemplate.DataTipRows(1);
+rowsY = h.DataTipTemplate.DataTipRows(2);
+infectedRow = dataTipTextRow('Infected', r(:));
+susceptibleRow = dataTipTextRow('Susceptible', g(:));
+recoveredRow = dataTipTextRow('Recovered', b(:));
+deadRow = dataTipTextRow('Dead', d(:));
+
+% Apply them all
+h.DataTipTemplate.DataTipRows = [rowsX, rowsY, infectedRow, susceptibleRow, recoveredRow, deadRow];
+
+
 % Plot
 figure;
 h = scatter(x, y, dotSizes, ones(length(x),3), 'filled'); % start white
+h.DataTipTemplate.DataTipRows(end+1) = dataTipTextRow('Dead', d(:));
 axis off;
 
 r = zeros(ROWS, COLS);
 r_history = zeros(ROWS, COLS, HEAL_RATE);
+b = zeros(ROWS, COLS);
 b_history = zeros(ROWS, COLS, IMMUNITY_LOSS_RATE);
+g = 1-r;
+d = zeros(ROWS, COLS);
 
 % Pick one random cell
 randRow = randi(ROWS)
 randCol = randi(COLS)
 
-rmax = min(randRow+1, ROWS);
-rmin = max(randRow-1, 1);
-cmax = min(randCol+1, COLS);
-cmin = max(randCol-1, 1);
+r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1; % Initial intensity
 
-r(rmin:rmax, cmin:cmax) = 0.15; % Initial intensity
-
-b = zeros(ROWS, COLS);
-g = 1-r;
-
-iter = 0;
 h.CData = [r(:), g(:), b(:)];
+iter = 0;
 drawnow;
 
 % Animation loop
 while true
-    r_history = cat(3, r, r_history(:,:,1:HEAL_RATE - 1));
-    b_history = cat(3, b, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
-    iter = iter + 1;
+    r_history = cat(3, infected, r_history(:,:,1:HEAL_RATE - 1));
+    iter = iter + 1  % Increment iteration counter
+    b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
     
     % Compute neighbor contributions
-    kernel = [0.2 0.5 0.2; 
-              0.5 3.0 0.5; 
-              0.2 0.5 0.2];
-    kernel = [0 0 0; 
-              0 3.0 0; 
-              0 0 0];
+    neighborSum = conv2(r .* sizeGrid.^1.2, SPREAD_KERNEL, 'same');
 
-    neighborSum = conv2(r .* sizeGrid.^1.1, kernel, 'same');
-
-    infected = SPREAD_RATE * neighborSum .* (1 - r - b);
-    healed =  0.95 .* max(r_history(:,:,HEAL_RATE - 1) - r_history(:,:,HEAL_RATE), 0);
+    infected = SPREAD_RATE * neighborSum ./ (1 + 3*neighborSum) .* g;
+    healed =  r_history(:,:,HEAL_RATE);
+    relapsed = b_history(:,:,IMMUNITY_LOSS_RATE);
+    dead = FATALITY_RATE .* r;
     
     % Update r and b
-    r = r - healed;
-    r = max(0, r);
-    %b = b - r + r_history(:,:,1);
-    b = min(b, 1);
-    r = r + infected;
-    r = min(r, 1);
-    
-    % ALWAYS recalculate g to maintain r + g + b = 1
-    g = 1 - r - b;
-    
-    % Update scatter colors
-    h.CData = [r(:), g(:), b(:)];
+    g = max(min(g - infected + relapsed, 1), 0);
+    r = max(min(r + infected - healed - dead, 1), 0);
+    b = max(min(b + healed - relapsed, 1), 0);
+    d = max(min(d + dead, 1), 0);  % accumulate dead
+
+    total = g + r + b + d;
+    g = g ./ total;
+    r = r ./ total;
+    b = b ./ total;
+    d = d ./ total;
+
+    % Color: include d (e.g., make dead black)
+    h.CData = [r(:), g(:), b(:)] .* (1 - d(:)); % darker if more dead
     drawnow;
-    pause(1);
+
+    % Update data tips for the current iteration
+    h.DataTipTemplate.DataTipRows(1).Value = r(:); 
+    h.DataTipTemplate.DataTipRows(2).Value = g(:); 
+    h.DataTipTemplate.DataTipRows(3).Value = b(:);
+    h.DataTipTemplate.DataTipRows(4).Value = d(:); 
+
+    pause(0.02);
 end
