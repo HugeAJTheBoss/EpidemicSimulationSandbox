@@ -9,7 +9,7 @@ SPREAD_RATE = 0.33;
 SICKEN_RATE = 8; 
 HEAL_RATE = 7;
 IMMUNITY_LOSS_RATE = 300;
-FATALITY_RATE = 0.01;
+FATALITY_RATE = 892/1000000;
 SPREAD_KERNEL = [0.2 0.5 0.2; 
           0.5 1.0 0.5; 
           0.2 0.5 0.2];
@@ -36,6 +36,61 @@ function vaccinate()
     h = evalin('base','h');
     h.CData = [r(:), g(:), b(:)];
 end
+
+function restart()
+    ROWS = evalin('base', 'ROWS');
+    COLS = evalin('base', 'COLS');
+    HEAL_RATE = evalin('base', 'HEAL_RATE');
+    IMMUNITY_LOSS_RATE = evalin('base', 'IMMUNITY_LOSS_RATE');
+    SICKEN_RATE = evalin('base', 'SICKEN_RATE');
+
+    h = evalin('base', 'h');
+
+    r = zeros(ROWS, COLS);
+    r_history = zeros(ROWS, COLS, HEAL_RATE);
+    b = zeros(ROWS, COLS);
+    b_history = zeros(ROWS, COLS, IMMUNITY_LOSS_RATE);
+    g = 1-r;
+    d = zeros(ROWS, COLS);
+    e = zeros(ROWS, COLS);
+    e_history = zeros(ROWS, COLS, SICKEN_RATE);
+
+    sickened = zeros(ROWS, COLS);
+    healed = zeros(ROWS, COLS);
+    infected = zeros(ROWS, COLS);
+
+    paused = true;
+
+    randRow = randi(ROWS)
+    randCol = randi(COLS)
+    
+    r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1; % Initial intensity
+    
+    h.CData = [r(:), g(:), b(:)];
+    drawnow;
+    iter = 0;
+
+    h.DataTipTemplate.DataTipRows(3).Value = g(:) * 100; 
+    h.DataTipTemplate.DataTipRows(4).Value = e(:) * 100; 
+    h.DataTipTemplate.DataTipRows(5).Value = r(:) * 100; 
+    h.DataTipTemplate.DataTipRows(6).Value = b(:) * 100;
+    h.DataTipTemplate.DataTipRows(7).Value = d(:) * 100; 
+
+    assignin('base', 'r', r);
+    assignin('base', 'r_history', r_history);
+    assignin('base', 'b', b);
+    assignin('base', 'b_history', b_history);
+    assignin('base', 'g', g);
+    assignin('base', 'd', d);
+    assignin('base', 'e', e);
+    assignin('base', 'e_history', e_history);
+    assignin('base', 'sickened', sickened);
+    assignin('base', 'healed', healed);
+    assignin('base', 'infected', infected);
+    assignin('base', 'paused', paused);
+    assignin('base', 'iter', iter);
+end
+
 
 population = round(lognrnd(MU, SIGMA, ROWS, COLS));
 
@@ -71,6 +126,11 @@ btnVaccinate = uibutton(fig, 'push', ...
     'Text', 'Vaccinate', ...
     'Position', [220, 20, 100, 30], ...
     'ButtonPushedFcn', @(src,event) vaccinate());
+
+btnRestart = uibutton(fig, 'push', ...
+    'Text', 'Restart', ...
+    'Position', [320, 20, 100, 30], ...
+    'ButtonPushedFcn', @(src,event) restart());
 
 paused = false;
 
@@ -130,13 +190,13 @@ while true
     sickened = e_history(:, :, SICKEN_RATE);
     healed =  r_history(:,:, HEAL_RATE);
     relapsed = b_history(:,:,IMMUNITY_LOSS_RATE);
-    dead = FATALITY_RATE .* r;
+    dead = FATALITY_RATE .* healed;
     
     % Update r and b
     g = max(min(g - infected + relapsed, 1), 0);
     e = max(min(e + infected - sickened, 1), 0);
-    r = max(min(r + infected - healed - dead, 1), 0);
-    b = max(min(b + healed - relapsed, 1), 0);
+    r = max(min(r + infected - healed, 1), 0);
+    b = max(min(b + healed - dead - relapsed, 1), 0);
     d = max(min(d + dead, 1), 0); % accumulate dead
 
     total = g + r + b + d + e;
@@ -156,4 +216,10 @@ while true
     h.DataTipTemplate.DataTipRows(5).Value = r(:) * 100; 
     h.DataTipTemplate.DataTipRows(6).Value = b(:) * 100;
     h.DataTipTemplate.DataTipRows(7).Value = d(:) * 100; 
+
+    totals = 100 * [sum(r(:)), sum(g(:)), sum(b(:)), sum(e(:)), sum(d(:))];
+
+    title(sprintf('R: %.1f   G: %.1f   B: %.1f   E: %.1f   D: %.1f', ...
+    totals(1), totals(2), totals(3), totals(4), totals(5)), ...
+    'FontSize', 12, 'FontWeight', 'bold');
 end
