@@ -12,6 +12,7 @@ function vaccinate()
     r = evalin('base','r');
     b = evalin('base','b');
     g = evalin('base','g');
+    valid_idx = evalin('base','valid_idx');
 
     b_history = evalin('base', 'b_history');
     IMMUNITY_LOSS_RATE = evalin('base', 'IMMUNITY_LOSS_RATE');
@@ -26,9 +27,12 @@ function vaccinate()
     assignin('base','g',g);
     assignin('base', 'b_history', b_history);
 
-    % Update scatter colors
+    % Update scatter colors - use only valid points
     h = evalin('base','h');
-    h.CData = [r(:), g(:), b(:)];
+    r_flat = r(:);
+    g_flat = g(:);
+    b_flat = b(:);
+    h.CData = [r_flat(valid_idx), g_flat(valid_idx), b_flat(valid_idx)];
 end
 
 function restart()
@@ -37,6 +41,7 @@ function restart()
     HEAL_RATE = evalin('base', 'HEAL_RATE');
     IMMUNITY_LOSS_RATE = evalin('base', 'IMMUNITY_LOSS_RATE');
     SICKEN_RATE = evalin('base', 'SICKEN_RATE');
+    valid_idx = evalin('base','valid_idx');
 
     h = evalin('base', 'h');
 
@@ -44,7 +49,7 @@ function restart()
     r_history = zeros(ROWS, COLS, HEAL_RATE);
     b = zeros(ROWS, COLS);
     b_history = zeros(ROWS, COLS, IMMUNITY_LOSS_RATE);
-    g = 1-r;
+    g = ones(ROWS, COLS);
     d = zeros(ROWS, COLS);
     e = zeros(ROWS, COLS);
     e_history = zeros(ROWS, COLS, SICKEN_RATE);
@@ -55,19 +60,22 @@ function restart()
 
     paused = true;
 
-    randRow = randi(ROWS)
-    randCol = randi(COLS)
+    randRow = randi(ROWS);
+    randCol = randi(COLS);
     
-    r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1; % Initial intensity
+    r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
     
-    h.CData = [r(:), g(:), b(:)];
+    r_flat = r(:);
+    g_flat = g(:);
+    b_flat = b(:);
+    h.CData = [r_flat(valid_idx), g_flat(valid_idx), b_flat(valid_idx)];
     drawnow;
     iter = 0;
 
-    h.DataTipTemplate.DataTipRows(3).Value = g(:) * 100; 
+    h.DataTipTemplate.DataTipRows(3).Value = g_flat(valid_idx) * 100; 
     h.DataTipTemplate.DataTipRows(4).Value = e(:) * 100; 
-    h.DataTipTemplate.DataTipRows(5).Value = r(:) * 100; 
-    h.DataTipTemplate.DataTipRows(6).Value = b(:) * 100;
+    h.DataTipTemplate.DataTipRows(5).Value = r_flat(valid_idx) * 100; 
+    h.DataTipTemplate.DataTipRows(6).Value = b_flat(valid_idx) * 100;
     h.DataTipTemplate.DataTipRows(7).Value = d(:) * 100; 
 
     assignin('base', 'r', r);
@@ -87,6 +95,9 @@ end
 
 [data, R] = readgeoraster('gpw_v4_population_density_rev11_2020_15_min.tif');
 
+ROWS = size(data, 1);
+COLS = size(data, 2);
+
 % Interpolate to higher resolution
 [X, Y] = meshgrid(1:size(data,2), 1:size(data,1));
 [Xq, Yq] = meshgrid(1:0.5:size(data,2), 1:0.5:size(data,1));
@@ -103,11 +114,15 @@ x = x(valid);
 y = y(valid);
 pop = pop(valid);
 
-dotSizes = sqrt(pop);
-dotSizes = dotSizes / max(dotSizes) * 6;
+dotSizes = sqrt(pop) / max(sqrt(pop)) * 6;
 
-figure;
-scatter(x, y, dotSizes, 'g', 'filled', 'MarkerEdgeColor', 'none');
+% Create sizeGrid as 2D matrix for calculations
+data(isnan(data)) = 0;
+sizeGrid = sqrt(data);
+sizeGrid = sizeGrid / max(sizeGrid(:));
+
+fig = figure;
+h = scatter(x, y, dotSizes, 'g', 'filled', 'MarkerEdgeColor', 'none');
 axis tight off;
 set(gca, 'YDir', 'reverse', 'Color', 'k');
 set(gcf, 'Color', 'k');
@@ -139,19 +154,27 @@ r = zeros(ROWS, COLS);
 r_history = zeros(ROWS, COLS, HEAL_RATE);
 b = zeros(ROWS, COLS);
 b_history = zeros(ROWS, COLS, IMMUNITY_LOSS_RATE);
-g = 1-r;
+g = ones(ROWS, COLS);
 d = zeros(ROWS, COLS);
 e = zeros(ROWS, COLS);
 e_history = zeros(ROWS, COLS, SICKEN_RATE);
 
+% Create mapping from interpolated points back to original grid
+% Round interpolated coordinates to nearest grid cell
+x_grid = round(x);
+y_grid = round(y);
+x_grid = max(1, min(x_grid, COLS));
+y_grid = max(1, min(y_grid, ROWS));
+valid_idx = sub2ind([ROWS, COLS], y_grid, x_grid);
+
 % Initialize data tools
 rowsX = h.DataTipTemplate.DataTipRows(1);
 rowsY = h.DataTipTemplate.DataTipRows(2);
-susceptibleRow = dataTipTextRow('Susceptible', g(:));
-exposedRow = dataTipTextRow('Exposed', e(:));
-infectedRow = dataTipTextRow('Infected', r(:));
-recoveredRow = dataTipTextRow('Recovered', b(:));
-deadRow = dataTipTextRow('Dead', d(:));
+susceptibleRow = dataTipTextRow('Susceptible', ones(length(x),1));
+exposedRow = dataTipTextRow('Exposed', zeros(length(x),1));
+infectedRow = dataTipTextRow('Infected', zeros(length(x),1));
+recoveredRow = dataTipTextRow('Recovered', zeros(length(x),1));
+deadRow = dataTipTextRow('Dead', zeros(length(x),1));
 
 sickened = zeros(ROWS, COLS);
 healed = zeros(ROWS, COLS);
@@ -161,12 +184,16 @@ infected = zeros(ROWS, COLS);
 h.DataTipTemplate.DataTipRows = [rowsX, rowsY, susceptibleRow, exposedRow, infectedRow, recoveredRow, deadRow];
 
 % Pick one random cell
-randRow = randi(ROWS)
-randCol = randi(COLS)
+randRow = randi(ROWS);
+randCol = randi(COLS);
 
-r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1; % Initial intensity
+r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
 
-h.CData = [r(:), g(:), b(:)];
+% Map to scatter colors
+r_flat = r(:);
+g_flat = g(:);
+b_flat = b(:);
+h.CData = [r_flat(valid_idx), g_flat(valid_idx), b_flat(valid_idx)];
 iter = 0;
 drawnow;
 
@@ -178,7 +205,7 @@ while true
         continue;
     end
 
-    iter = iter + 1  % Increment iteration counter
+    iter = iter + 1
 
     r_history = cat(3, sickened, r_history(:,:,1:HEAL_RATE - 1));
     b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
@@ -196,9 +223,9 @@ while true
     % Update r and b
     g = max(min(g - infected + relapsed, 1), 0);
     e = max(min(e + infected - sickened, 1), 0);
-    r = max(min(r + infected - healed, 1), 0);
+    r = max(min(r + sickened - healed, 1), 0);
     b = max(min(b + healed - dead - relapsed, 1), 0);
-    d = max(min(d + dead, 1), 0); % accumulate dead
+    d = max(min(d + dead, 1), 0);
 
     total = g + r + b + d + e;
     g = g ./ total;
@@ -207,16 +234,22 @@ while true
     d = d ./ total;
     e = e ./ total;
 
-    % Color: include d (e.g., make dead black)
-    h.CData = [r(:), g(:), b(:)] .* (1 - d(:)); % darker if more dead
+    % Map to scatter colors
+    r_flat = r(:);
+    g_flat = g(:);
+    b_flat = b(:);
+    d_flat = d(:);
+    e_flat = e(:);
+    
+    h.CData = [r_flat(valid_idx), g_flat(valid_idx), b_flat(valid_idx)] .* (1 - d_flat(valid_idx));
     drawnow;
 
     % Update data tips for the current iteration
-    h.DataTipTemplate.DataTipRows(3).Value = g(:) * 100; 
-    h.DataTipTemplate.DataTipRows(4).Value = e(:) * 100; 
-    h.DataTipTemplate.DataTipRows(5).Value = r(:) * 100; 
-    h.DataTipTemplate.DataTipRows(6).Value = b(:) * 100;
-    h.DataTipTemplate.DataTipRows(7).Value = d(:) * 100; 
+    h.DataTipTemplate.DataTipRows(3).Value = g_flat(valid_idx) * 100; 
+    h.DataTipTemplate.DataTipRows(4).Value = e_flat(valid_idx) * 100; 
+    h.DataTipTemplate.DataTipRows(5).Value = r_flat(valid_idx) * 100; 
+    h.DataTipTemplate.DataTipRows(6).Value = b_flat(valid_idx) * 100;
+    h.DataTipTemplate.DataTipRows(7).Value = d_flat(valid_idx) * 100; 
 
     totals = 100 * [sum(r(:)), sum(g(:)), sum(b(:)), sum(e(:)), sum(d(:))];
 
