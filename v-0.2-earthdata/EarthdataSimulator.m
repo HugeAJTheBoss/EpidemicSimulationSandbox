@@ -1,12 +1,12 @@
 % Virus Modifiers
-SPREAD_RATE = 3;
+SPREAD_RATE = 10;
 SICKEN_RATE = 8; 
 HEAL_RATE = 7;
 IMMUNITY_LOSS_RATE = 300;
 FATALITY_RATE = 892/1000000;
-SPREAD_KERNEL = [0.2 0.5 0.2; 
-          0.5 1.0 0.5; 
-          0.2 0.5 0.2];
+SPREAD_KERNEL = [1.2 1.5 1.2; 
+          1.5 1.0 1.5; 
+          1.2 1.5 1.2];
 
 function vaccinate()
     r = evalin('base','r');
@@ -191,10 +191,11 @@ infected = zeros(ROWS, COLS);
 % Apply them all
 h.DataTipTemplate.DataTipRows = [rowsX, rowsY, susceptibleRow, exposedRow, infectedRow, recoveredRow, deadRow];
 
-% Pick one random cell
-randRow = randi(ROWS);
-randCol = randi(COLS);
+randIdx = randi(numel(pop));                  % pick random valid index
+linearIdx = valid_idx(randIdx);               % map back to population grid
+[randRow, randCol] = ind2sub(size(data), linearIdx);
 
+% Infect a small local region around that cell
 r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
 
 % Map to scatter colors
@@ -214,8 +215,11 @@ b = gpuArray(b);
 d = gpuArray(d);
 e = gpuArray(e);
 r_history = gpuArray(r_history);
+r_ptr = 1;
 b_history = gpuArray(b_history);
+b_ptr = 1;
 e_history = gpuArray(e_history);
+e_ptr = 1;
 
 % Animation loop
 while true
@@ -256,6 +260,8 @@ while true
     r_flat = gather(r(:));
     g_flat = gather(g(:));
     b_flat = gather(b(:));
+    e_flat = gather(e(:));
+    d_flat = gather(d(:));
     
     % Update only a subset of points
     batch = updateBatches{currentBatch};
