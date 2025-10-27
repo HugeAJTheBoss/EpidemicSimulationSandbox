@@ -1,12 +1,12 @@
 % Virus Modifiers
-SPREAD_RATE = 10;
+SPREAD_RATE = 3;
 SICKEN_RATE = 8; 
 HEAL_RATE = 7;
 IMMUNITY_LOSS_RATE = 300;
 FATALITY_RATE = 892/1000000;
-SPREAD_KERNEL = [1.2 1.5 1.2; 
-          1.5 1.0 1.5; 
-          1.2 1.5 1.2];
+SPREAD_KERNEL = [0.2 0.5 0.2; 
+          0.5 1.0 0.5; 
+          0.2 0.5 0.2];
 
 function vaccinate()
     r = evalin('base','r');
@@ -191,11 +191,10 @@ infected = zeros(ROWS, COLS);
 % Apply them all
 h.DataTipTemplate.DataTipRows = [rowsX, rowsY, susceptibleRow, exposedRow, infectedRow, recoveredRow, deadRow];
 
-randIdx = randi(numel(pop));                  % pick random valid index
-linearIdx = valid_idx(randIdx);               % map back to population grid
-[randRow, randCol] = ind2sub(size(data), linearIdx);
+% Pick one random cell
+randRow = randi(ROWS);
+randCol = randi(COLS);
 
-% Infect a small local region around that cell
 r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
 
 % Map to scatter colors
@@ -229,9 +228,13 @@ while true
 
     iter = iter + 1;
 
-    r_history = cat(3, sickened, r_history(:,:,1:HEAL_RATE - 1));
-    b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
-    e_history = cat(3, infected, e_history(:,:,1:SICKEN_RATE - 1));
+    % r_history = cat(3, sickened, r_history(:,:,1:HEAL_RATE - 1));
+    % b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
+    % e_history = cat(3, infected, e_history(:,:,1:SICKEN_RATE - 1));
+
+    r_history(:, :, r_ptr) = sickened;
+    b_history(:, :, r_ptr) = sickened;
+    e_history(:, :, r_ptr) = sickened;
     
     % Compute neighbor contributions
     neighborSum = conv2(r .* sizeGrid.^1.2, SPREAD_KERNEL, 'same');
@@ -260,8 +263,6 @@ while true
     r_flat = gather(r(:));
     g_flat = gather(g(:));
     b_flat = gather(b(:));
-    e_flat = gather(e(:));
-    d_flat = gather(d(:));
     
     % Update only a subset of points
     batch = updateBatches{currentBatch};
