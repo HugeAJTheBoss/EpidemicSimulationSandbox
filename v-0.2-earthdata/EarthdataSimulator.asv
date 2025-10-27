@@ -29,10 +29,7 @@ function vaccinate()
 
     % Update scatter colors - use only valid points
     h = evalin('base','h');
-    r_flat = r(:);
-    g_flat = g(:);
-    b_flat = b(:);
-    h.CData = [r_flat(valid_idx), g_flat(valid_idx), b_flat(valid_idx)];
+    set(h, 'CData', cat(3, r, g, b));
 end
 
 function restart()
@@ -65,10 +62,7 @@ function restart()
     
     r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
     
-    r_flat = r(:);
-    g_flat = g(:);
-    b_flat = b(:);
-    h.CData = [r_flat(valid_idx), g_flat(valid_idx), b_flat(valid_idx)];
+    set(h, 'CData', cat(3, r, g, b));
     drawnow;
     iter = 0;
 
@@ -121,19 +115,36 @@ data(isnan(data)) = 0;
 sizeGrid = sqrt(data);
 sizeGrid = sizeGrid / max(sizeGrid(:));
 
+
 fig = figure;
-h = scatter(x, y, dotSizes, 'g', 'filled', 'MarkerEdgeColor', 'none');
-axis tight off;
-set(gca, 'YDir', 'reverse', 'Color', 'k');
-set(gcf, 'Color', 'k');
+popMap = sqrt(data);           % or sqrt(data_interp) if using interpolated
+popMap = popMap / max(popMap(:)); 
+popMap(isnan(popMap)) = 0;
 
-% Split indices into 10 roughly equal chunks
-numChunks = 6;
-N = numel(valid_idx);
-batchSize = ceil(N / numChunks);
-updateBatches = arrayfun(@(k) ((k-1)*batchSize+1):min(k*batchSize, N), 1:numChunks, 'UniformOutput', false);
+% Base state colors
+colorImg = cat(3, r, g, b);
 
-currentBatch = 1;  % start at batch 1
+% Multiply each channel by population weight
+colorImg(:,:,1) = colorImg(:,:,1) .* popMap;
+colorImg(:,:,2) = colorImg(:,:,2) .* popMap;
+colorImg(:,:,3) = colorImg(:,:,3) .* popMap;
+
+% Show with alpha for land-only pixels
+mask = popMap > 0;
+h = imshow(colorImg, 'AlphaData', double(mask));
+axis on;
+
+function txt = showPixelInfo(event, r, g, b, e, d)
+    pos = round(event.Position);
+    txt = {
+        sprintf('X: %d, Y: %d', pos(1), pos(2))
+        sprintf('R: %.1f%%', 100 * r(pos(2), pos(1)))
+        sprintf('G: %.1f%%', 100 * g(pos(2), pos(1)))
+        sprintf('B: %.1f%%', 100 * b(pos(2), pos(1)))
+        sprintf('E: %.1f%%', 100 * e(pos(2), pos(1)))
+        sprintf('D: %.1f%%', 100 * d(pos(2), pos(1)))
+    };
+end
 
 % Control Buttons
 btnPause = uibutton(fig, 'push', ...
@@ -160,12 +171,15 @@ paused = false;
 
 r = zeros(ROWS, COLS);
 r_history = zeros(ROWS, COLS, HEAL_RATE, 'like', r);
+r_ptr = 1;
 b = zeros(ROWS, COLS);
 b_history = zeros(ROWS, COLS, IMMUNITY_LOSS_RATE, 'like', b);
+b_ptr = 1;
 g = ones(ROWS, COLS);
 d = zeros(ROWS, COLS);
 e = zeros(ROWS, COLS);
 e_history = zeros(ROWS, COLS, SICKEN_RATE, 'like', e);
+e_ptr = 1;
 
 % Create mapping from interpolated points back to original grid
 % Round interpolated coordinates to nearest grid cell
@@ -176,20 +190,20 @@ y_grid = max(1, min(y_grid, ROWS));
 valid_idx = sub2ind([ROWS, COLS], y_grid, x_grid);
 
 % Initialize data tools
-rowsX = h.DataTipTemplate.DataTipRows(1);
-rowsY = h.DataTipTemplate.DataTipRows(2);
-susceptibleRow = dataTipTextRow('Susceptible', ones(length(x),1));
-exposedRow = dataTipTextRow('Exposed', zeros(length(x),1));
-infectedRow = dataTipTextRow('Infected', zeros(length(x),1));
-recoveredRow = dataTipTextRow('Recovered', zeros(length(x),1));
-deadRow = dataTipTextRow('Dead', zeros(length(x),1));
+% rowsX = h.DataTipTemplate.DataTipRows(1);
+% rowsY = h.DataTipTemplate.DataTipRows(2);
+% susceptibleRow = dataTipTextRow('Susceptible', ones(length(x),1));
+% exposedRow = dataTipTextRow('Exposed', zeros(length(x),1));
+% infectedRow = dataTipTextRow('Infected', zeros(length(x),1));
+% recoveredRow = dataTipTextRow('Recovered', zeros(length(x),1));
+% deadRow = dataTipTextRow('Dead', zeros(length(x),1));
 
 sickened = zeros(ROWS, COLS);
 healed = zeros(ROWS, COLS);
 infected = zeros(ROWS, COLS);
 
 % Apply them all
-h.DataTipTemplate.DataTipRows = [rowsX, rowsY, susceptibleRow, exposedRow, infectedRow, recoveredRow, deadRow];
+% h.DataTipTemplate.DataTipRows = [rowsX, rowsY, susceptibleRow, exposedRow, infectedRow, recoveredRow, deadRow];
 
 % Pick one random cell
 randRow = randi(ROWS);
@@ -198,12 +212,9 @@ randCol = randi(COLS);
 r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
 
 % Map to scatter colors
-r_flat = r(:);
-g_flat = g(:);
-b_flat = b(:);
-h.CData = [r_flat(valid_idx), g_flat(valid_idx), b_flat(valid_idx)];
+colorImg = cat(3, gather(r), gather(g), gather(b));
+set(h, 'CData', colorImg);
 iter = 0;
-tStart = tic;
 drawnow;
 
 % Use GPU for heavy variables
@@ -223,7 +234,7 @@ while true
         continue;
     end
 
-    iter = iter + 1;
+    iter = iter + 1
 
     r_history = cat(3, sickened, r_history(:,:,1:HEAL_RATE - 1));
     b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
@@ -252,35 +263,23 @@ while true
     d = d ./ total;
     e = e ./ total;
 
-    % Flatten arrays
-    r_flat = gather(r(:));
-    g_flat = gather(g(:));
-    b_flat = gather(b(:));
-    
-    % Update only a subset of points
-    batch = updateBatches{currentBatch};
-    h.CData(batch, :) = [r_flat(valid_idx(batch)), g_flat(valid_idx(batch)), b_flat(valid_idx(batch))];
-    
-    % Advance batch pointer
-    currentBatch = mod(currentBatch, numChunks) + 1;
-    
-    % Occasionally redraw for performance balance
+    % Map to scatter colors
     if mod(iter, 2) == 0
+        colorImg = cat(3, gather(r), gather(g), gather(b));
+        colorImg(:,:,1) = colorImg(:,:,1) .* popMap;
+        colorImg(:,:,2) = colorImg(:,:,2) .* popMap;
+        colorImg(:,:,3) = colorImg(:,:,3) .* popMap;
+        h.CData = colorImg;
         drawnow limitrate;
     end
-    
-    % Monitor ticks per second
-    if mod(iter,10)==0
-        fprintf('Iter: %d | Iter/s: %.2f\n', iter, 10/toc(tStart));
-        tStart = tic;
-    end
+    drawnow;
 
     % Update data tips for the current iteration
-    h.DataTipTemplate.DataTipRows(3).Value = g_flat(valid_idx) * 100; 
-    h.DataTipTemplate.DataTipRows(4).Value = e_flat(valid_idx) * 100; 
-    h.DataTipTemplate.DataTipRows(5).Value = r_flat(valid_idx) * 100; 
-    h.DataTipTemplate.DataTipRows(6).Value = b_flat(valid_idx) * 100;
-    h.DataTipTemplate.DataTipRows(7).Value = d_flat(valid_idx) * 100; 
+    % h.DataTipTemplate.DataTipRows(3).Value = g_flat(valid_idx) * 100; 
+    % h.DataTipTemplate.DataTipRows(4).Value = e_flat(valid_idx) * 100; 
+    % h.DataTipTemplate.DataTipRows(5).Value = r_flat(valid_idx) * 100; 
+    % h.DataTipTemplate.DataTipRows(6).Value = b_flat(valid_idx) * 100;
+    % h.DataTipTemplate.DataTipRows(7).Value = d_flat(valid_idx) * 100; 
 
     totals = 100 * [sum(r(:)), sum(g(:)), sum(b(:)), sum(e(:)), sum(d(:))];
 
