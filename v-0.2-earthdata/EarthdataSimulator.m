@@ -93,6 +93,122 @@ function restart()
     assignin('base', 'iter', iter);
 end
 
+function runTick()
+    if evalin('base','paused')
+        return;
+    end
+
+    iter = evalin('base', 'iter');
+    r = evalin('base', 'r');
+    g = evalin('base', 'g');
+    b = evalin('base', 'b');
+    d = evalin('base', 'd');
+    e = evalin('base', 'e');
+    r_history = evalin('base', 'r_history');
+    b_history = evalin('base', 'b_history');
+    e_history = evalin('base', 'e_history');
+    sickened = evalin('base', 'sickened');
+    healed = evalin('base', 'healed');
+    infected = evalin('base', 'infected');
+    sizeGrid = evalin('base', 'sizeGrid');
+    valid_idx = evalin('base', 'valid_idx');
+    h = evalin('base', 'h');
+    updateBatches = evalin('base', 'updateBatches');
+    currentBatch = evalin('base', 'currentBatch');
+    tStart = evalin('base', 'tStart');
+    SPREAD_RATE = evalin('base', 'SPREAD_RATE');
+    SPREAD_KERNEL = evalin('base', 'SPREAD_KERNEL');
+    HEAL_RATE = evalin('base', 'HEAL_RATE');
+    IMMUNITY_LOSS_RATE = evalin('base', 'IMMUNITY_LOSS_RATE');
+    SICKEN_RATE = evalin('base', 'SICKEN_RATE');
+    FATALITY_RATE = evalin('base', 'FATALITY_RATE');
+    numChunks = evalin('base', 'numChunks');
+
+    iter = iter + 1;
+
+    r_history = cat(3, sickened, r_history(:,:,1:HEAL_RATE - 1));
+    b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
+    e_history = cat(3, infected, e_history(:,:,1:SICKEN_RATE - 1));
+    
+    % Compute neighbor contributions
+    neighborSum = conv2(r .* sizeGrid.^1.2, SPREAD_KERNEL, 'same');
+
+    infected = SPREAD_RATE * neighborSum ./ (1 + 3*neighborSum) .* g;
+    sickened = e_history(:, :, SICKEN_RATE);
+    healed =  r_history(:,:, HEAL_RATE);
+    relapsed = b_history(:,:,IMMUNITY_LOSS_RATE);
+    dead = FATALITY_RATE .* healed;
+    
+    % Update r and b
+    g = max(min(g - infected + relapsed, 1), 0);
+    e = max(min(e + infected - sickened, 1), 0);
+    r = max(min(r + sickened - healed, 1), 0);
+    b = max(min(b + healed - dead - relapsed, 1), 0);
+    d = max(min(d + dead, 1), 0);
+
+    total = g + r + b + d + e;
+    g = g ./ total;
+    r = r ./ total;
+    b = b ./ total;
+    d = d ./ total;
+    e = e ./ total;
+
+    % Flatten arrays
+    r_flat = gather(r(:));
+    g_flat = gather(g(:));
+    b_flat = gather(b(:));
+    e_flat = gather(e(:));
+    d_flat = gather(d(:));
+    
+    % Update only a subset of points
+    batch = updateBatches{currentBatch};
+    h.CData(batch, :) = [r_flat(valid_idx(batch)), g_flat(valid_idx(batch)), b_flat(valid_idx(batch))];
+    
+    % Advance batch pointer
+    currentBatch = mod(currentBatch, numChunks) + 1;
+    
+    % Occasionally redraw for performance balance
+    if mod(iter, 2) == 0
+        drawnow limitrate;
+    end
+    
+    % Monitor ticks per second
+    if mod(iter,10)==0
+        fprintf('Iter: %d | Iter/s: %.2f\n', iter, 10/toc(tStart));
+        tStart = tic;
+    end
+
+    % Update data tips for the current iteration
+    h.DataTipTemplate.DataTipRows(3).Value = g_flat(valid_idx) * 100; 
+    h.DataTipTemplate.DataTipRows(4).Value = e_flat(valid_idx) * 100; 
+    h.DataTipTemplate.DataTipRows(5).Value = r_flat(valid_idx) * 100; 
+    h.DataTipTemplate.DataTipRows(6).Value = b_flat(valid_idx) * 100;
+    h.DataTipTemplate.DataTipRows(7).Value = d_flat(valid_idx) * 100; 
+
+    totals = 100 * [sum(r(:)), sum(g(:)), sum(b(:)), sum(e(:)), sum(d(:))];
+
+    title(sprintf('R: %.1f   G: %.1f   B: %.1f   E: %.1f   D: %.1f', ...
+    totals(1), totals(2), totals(3), totals(4), totals(5)), ...
+    'FontSize', 12, 'FontWeight', 'bold');
+
+    % Save variables back to base workspace
+    assignin('base', 'iter', iter);
+    assignin('base', 'r', r);
+    assignin('base', 'g', g);
+    assignin('base', 'b', b);
+    assignin('base', 'd', d);
+    assignin('base', 'e', e);
+    assignin('base', 'r_history', r_history);
+    assignin('base', 'b_history', b_history);
+    assignin('base', 'e_history', e_history);
+    assignin('base', 'sickened', sickened);
+    assignin('base', 'healed', healed);
+    assignin('base', 'infected', infected);
+    assignin('base', 'currentBatch', currentBatch);
+    assignin('base', 'tStart', tStart);
+    assignin('base', 'h', h);
+end
+
 [data, R] = readgeoraster('gpw_v4_population_density_rev11_2020_15_min.tif');
 
 ROWS = size(data, 1);
@@ -185,7 +301,9 @@ h.DataTipTemplate.DataTipRows = [rowsX, rowsY, susceptibleRow, exposedRow, infec
 
 randIdx = randi(numel(pop));                  % pick random valid index
 linearIdx = valid_idx(randIdx);               % map back to population grid
-[randRow, randCol] = ind2sub(size(data), linearIdx);
+randRow = 226;
+randCol = 863;
+%[randRow, randCol] = ind2sub(size(data), linearIdx);
 
 % Infect a small local region around that cell
 r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
@@ -221,77 +339,8 @@ b_ptr = 1;
 e_history = gpuArray(e_history);
 e_ptr = 1;
 
-% Animation loop
-while true
-    if evalin('base','paused')
-        continue;
-    end
-
-    iter = iter + 1;
-
-    r_history = cat(3, sickened, r_history(:,:,1:HEAL_RATE - 1));
-    b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
-    e_history = cat(3, infected, e_history(:,:,1:SICKEN_RATE - 1));
-    
-    % Compute neighbor contributions
-    neighborSum = conv2(r .* sizeGrid.^1.2, SPREAD_KERNEL, 'same');
-
-    infected = SPREAD_RATE * neighborSum ./ (1 + 3*neighborSum) .* g;
-    sickened = e_history(:, :, SICKEN_RATE);
-    healed =  r_history(:,:, HEAL_RATE);
-    relapsed = b_history(:,:,IMMUNITY_LOSS_RATE);
-    dead = FATALITY_RATE .* healed;
-    
-    % Update r and b
-    g = max(min(g - infected + relapsed, 1), 0);
-    e = max(min(e + infected - sickened, 1), 0);
-    r = max(min(r + sickened - healed, 1), 0);
-    b = max(min(b + healed - dead - relapsed, 1), 0);
-    d = max(min(d + dead, 1), 0);
-
-    total = g + r + b + d + e;
-    g = g ./ total;
-    r = r ./ total;
-    b = b ./ total;
-    d = d ./ total;
-    e = e ./ total;
-
-    % Flatten arrays
-    r_flat = gather(r(:));
-    g_flat = gather(g(:));
-    b_flat = gather(b(:));
-    e_flat = gather(e(:));
-    d_flat = gather(d(:));
-    
-    % Update only a subset of points
-    batch = updateBatches{currentBatch};
-    h.CData(batch, :) = [r_flat(valid_idx(batch)), g_flat(valid_idx(batch)), b_flat(valid_idx(batch))];
-    
-    % Advance batch pointer
-    currentBatch = mod(currentBatch, numChunks) + 1;
-    
-    % Occasionally redraw for performance balance
-    if mod(iter, 2) == 0
-        drawnow limitrate;
-    end
-    
-    % Monitor ticks per second
-    if mod(iter,10)==0
-        fprintf('Iter: %d | Iter/s: %.2f\n', iter, 10/toc(tStart));
-        tStart = tic;
-    end
-
-    % Update data tips for the current iteration
-    h.DataTipTemplate.DataTipRows(3).Value = g_flat(valid_idx) * 100; 
-    h.DataTipTemplate.DataTipRows(4).Value = e_flat(valid_idx) * 100; 
-    h.DataTipTemplate.DataTipRows(5).Value = r_flat(valid_idx) * 100; 
-    h.DataTipTemplate.DataTipRows(6).Value = b_flat(valid_idx) * 100;
-    h.DataTipTemplate.DataTipRows(7).Value = d_flat(valid_idx) * 100; 
-
-    totals = 100 * [sum(r(:)), sum(g(:)), sum(b(:)), sum(e(:)), sum(d(:))];
-
-    title(sprintf('R: %.1f   G: %.1f   B: %.1f   E: %.1f   D: %.1f', ...
-    totals(1), totals(2), totals(3), totals(4), totals(5)), ...
-    'FontSize', 12, 'FontWeight', 'bold');
-end
-
+% Animation loop - use timer to call runTick repeatedly
+tmr = timer('ExecutionMode', 'fixedRate', ...
+            'Period', 0.001, ...
+            'TimerFcn', @(~,~) runTick());
+start(tmr);
