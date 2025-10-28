@@ -1,0 +1,5 @@
+Flask==2.3.2
+flask-cors==3.0.10
+# Requests is used by some backend helpers and tests
+requests==2.31.0
+# Optional: matlabengine for python is installed via MATLAB's installer; not on PyPI
