@@ -1,12 +1,12 @@
 % Virus Modifiers
-SPREAD_RATE = 10;
+SPREAD_RATE = 1;
 SICKEN_RATE = 8; 
 HEAL_RATE = 7;
 IMMUNITY_LOSS_RATE = 300;
 FATALITY_RATE = 892/1000000;
-SPREAD_KERNEL = [1.2 1.5 1.2; 
-          1.5 1.0 1.5; 
-          1.2 1.5 1.2];
+SPREAD_KERNEL = [0.2 0.5 0.2; 
+          0.5 1.0 0.5; 
+          0.2 0.5 0.2];
 
 function vaccinate()
     r = evalin('base','r');
@@ -127,14 +127,6 @@ axis tight off;
 set(gca, 'YDir', 'reverse', 'Color', 'k');
 set(gcf, 'Color', 'k');
 
-% Split indices into 10 roughly equal chunks
-numChunks = 6;
-N = numel(valid_idx);
-batchSize = ceil(N / numChunks);
-updateBatches = arrayfun(@(k) ((k-1)*batchSize+1):min(k*batchSize, N), 1:numChunks, 'UniformOutput', false);
-
-currentBatch = 1;  % start at batch 1
-
 % Control Buttons
 btnPause = uibutton(fig, 'push', ...
     'Text', 'Pause', ...
@@ -197,6 +189,14 @@ linearIdx = valid_idx(randIdx);               % map back to population grid
 
 % Infect a small local region around that cell
 r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
+
+% Split indices into 10 roughly equal chunks
+numChunks = 6;
+N = numel(valid_idx);
+batchSize = ceil(N / numChunks);
+updateBatches = arrayfun(@(k) ((k-1)*batchSize+1):min(k*batchSize, N), 1:numChunks, 'UniformOutput', false);
+
+currentBatch = 1;  % start at batch 1
 
 % Map to scatter colors
 r_flat = r(:);
@@ -294,3 +294,4 @@ while true
     totals(1), totals(2), totals(3), totals(4), totals(5)), ...
     'FontSize', 12, 'FontWeight', 'bold');
 end
+

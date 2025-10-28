@@ -110,6 +110,7 @@ sizeGrid = reshape(dotSizes, ROWS, COLS) / 67; % scale down
 fig = figure;
 h = scatter(x, y, dotSizes, ones(length(x),3), 'filled'); % start white
 axis off;
+tStart = tic;
 
 % Control Buttons
 btnPause = uibutton(fig, 'push', ...
@@ -222,4 +223,9 @@ while true
     title(sprintf('R: %.1f   G: %.1f   B: %.1f   E: %.1f   D: %.1f', ...
     totals(1), totals(2), totals(3), totals(4), totals(5)), ...
     'FontSize', 12, 'FontWeight', 'bold');
+
+    if mod(iter,10)==0
+        fprintf('Iter: %d | Iter/s: %.2f\n', iter, 10/toc(tStart));
+        tStart = tic;
+    end
 end
