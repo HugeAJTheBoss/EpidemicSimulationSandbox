@@ -170,6 +170,9 @@ h.CData = [r(:), g(:), b(:)];
 iter = 0;
 drawnow;
 
+cd(fileparts(mfilename('fullpath')));
+scriptDir = fileparts(mfilename('fullpath'));
+
 % Animation loop
 while true
     pause(0.02);
@@ -227,5 +230,9 @@ while true
     if mod(iter,10)==0
         fprintf('Iter: %d | Iter/s: %.2f\n', iter, 10/toc(tStart));
         tStart = tic;
+    end
+
+    if mod(iter, 3) == 0
+        imwrite(getframe(fig).cdata, fullfile(scriptDir, sprintf('frame.jpg')), 'jpg');
     end
 end
