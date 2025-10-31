@@ -13,6 +13,7 @@ node_modules
 dist
 dist-ssr
 *.local
+/v-0.2-earthdata/my-react-app/public/frame.jpg
 
 # Editor directories and files
 .vscode/*
