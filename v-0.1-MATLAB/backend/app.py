@@ -218,5 +218,5 @@ def run_person():
 if __name__ == '__main__':
     # When running locally this block starts the Flask development server.
     # For production use a WSGI server (gunicorn/uWSGI) and disable debug.
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
