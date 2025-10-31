@@ -1,0 +1,23 @@
+:root {
+  --bg: #0b1220;
+  --bg-2: #0f1a2b;
+  --card: rgba(255,255,255,0.03);
+  --glass: rgba(255,255,255,0.04);
+  --accent: #7c5cff;
+  --accent-2: #40c9a2;
+  --muted: #9aa8b2;
+  --text: #e6eef6;
+  --success: #40c9a2;
+  --danger: #ff6b6b;
+  --shadow: 0 10px 30px rgba(2,6,23,0.6);
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  color-scheme: dark;
+  --cell-size: 34px;
+}
+
+.live-sim-image{
+    width: 50%;
+}
+.background{
+    background-color: 'lightblue';
+}
