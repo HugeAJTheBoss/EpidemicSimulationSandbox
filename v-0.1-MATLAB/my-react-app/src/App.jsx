@@ -13,14 +13,7 @@ import { useState } from "react";
   - Call the backend `/api/run_population` endpoint and parse its JSON response.
   - Normalize different response shapes (some payloads are nested under `result`).
   - Convert a flat 1D population array into a 2D grid when necessary.
-  - Render the 2D grid as a colored heatmap where cell color maps to value.
 
-  Data contract (backend -> frontend):
-  - Expected successful response shape:
-    { success: true, result: { rows: <number>, cols: <number>, population: <2D array OR 1D array> } }
-  - The code is defensive — it accepts several shapes and attempts to infer rows/cols.
-
-  Notes for new coders:
   - Keep network calls async using fetch + await.
   - The UI stores a minimal state and derives the visual grid from `population.grid`.
   - Styling and sizes are controlled in `src/index.css` using CSS variables (e.g. --cell-size).
@@ -156,7 +149,7 @@ function App() {
                 <div className="meta">Shape: {population.rows || population.grid.length} × {population.cols || (population.grid[0] && population.grid[0].length)}</div>
                 <div
                   className="population-grid"
-                  style={{ gridTemplateColumns: `repeat(${population.cols || (population.grid[0] && population.grid[0].length) || 10}, var(--cell-size))` }}
+                  style={{ gridTemplateColumns: `repeat(${population.cols || (population.grid[0] && population.grid[0].length) || 50}, var(--cell-size))` }}
                 >
                   {(() => {
                     const flat = [];
@@ -172,8 +165,8 @@ function App() {
                       // interpolate hue between 200 (cool) and 10 (hot)
                       const hue = 200 - normalized * 190; // 200 -> 10
                       const lightness = 30 + normalized * 30; // 30% -> 60%
-                      const bg = `hsl(${hue}deg 100% ${lightness}%)`;
-                      const color = normalized > 0.6 ? '#061422' : '#e9eef6';
+                      const bg = '#008000'
+                      const color = '#061422'
                       return (
                         <div key={i} className="cell" title={String(val)} style={{ background: bg, color }}>
                           <div className="cell-val">{String(val)}</div>
@@ -196,3 +189,6 @@ function App() {
 }
 
 export default App;
+
+// for running, in .venv: export PORT=5001, python3 "/Users/hugeajtheboss/Documents/MAMS_CS_PASSION/EpidemicSimulationSandbox/v-0.1-MATLAB/backend/app.py"
+//new terminal; npm run dev from myreactapp
