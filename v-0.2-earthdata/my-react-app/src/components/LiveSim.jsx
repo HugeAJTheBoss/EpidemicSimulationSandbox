@@ -1,15 +1,15 @@
 import React from 'react';
-import './CSS/index.css';
+import '../CSS/index.css';
 
 export default function LiveSim() {
   return (
     <img
-      src="http://localhost:5001/live_frame"
+      src="http://localhost:5000/frame"
       alt="SimulationVisual"
-      className="live-sim-image"
+      className="rounded-corners"
       onError={(e) => {
         e.target.onerror = null
-        e.target.src = 'WakaWakaMeme.png'
+        e.target.src = 'tanayrequest.jpg'
       }}
     />
   );
