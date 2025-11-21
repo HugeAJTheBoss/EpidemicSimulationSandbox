@@ -1,24 +1,25 @@
-from flask import Flask, send_file, Response
-from flask_cors import CORS
-import time, os
+from flask import Flask, Response
+import requests
+import time
 
 app = Flask(__name__)
-CORS(app)
+url = "https://dis-personals-terminals-memorial.trycloudflare.com/frame.jpg"
 
-@app.route('/live_frame')
-def live_frame():
-    def generate():
-        while True:
-            if os.path.exists('frame.jpg'):
-                with open('frame.jpg', 'rb') as f:
-                    frame = f.read()
-                yield (b"--frame\r\n"
-                       b"Content-Type: image/jpeg\r\n\r\n"+ frame + b"\r\n")
-                time.sleep(0.5) #adjust as needed
-    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
+def generate_frames():
+    while True:
+        try:
+            r = requests.get(url, timeout=5)
+            r.raise_for_status()
+            frame = r.content
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        except requests.RequestException:
+            pass
+        time.sleep(0.5)
 
+@app.route("/frame")
+def frame():
+    return Response(generate_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
-    
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001)
