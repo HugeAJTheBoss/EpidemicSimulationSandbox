@@ -1,23 +1,79 @@
 :root {
-  --bg: #0b1220;
-  --bg-2: #0f1a2b;
-  --card: rgba(255,255,255,0.03);
-  --glass: rgba(255,255,255,0.04);
-  --accent: #7c5cff;
-  --accent-2: #40c9a2;
-  --muted: #9aa8b2;
-  --text: #e6eef6;
-  --success: #40c9a2;
-  --danger: #ff6b6b;
-  --shadow: 0 10px 30px rgba(2,6,23,0.6);
+  background-color: #0C1120;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  color-scheme: dark;
-  --cell-size: 34px;
+  color: white;
 }
 
-.live-sim-image{
-    width: 50%;
+body {
+  background-color: #0C1120;
+  color: white;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  margin: 0;
 }
-.background{
-    background-color: 'lightblue';
+
+.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+h1 {
+    text-align: center;
+    color: #7C5CFF;
+    font-size: 2.5rem;
+    margin-top: 20px;
+}
+h2 {
+    text-align: center;
+    color: #7C5CFF;
+    font-size: 1rem;
+    margin-top: 20px;
+}
+
+.population-sim-btn {
+  position: relative;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  background: linear-gradient(90deg, #7c3aed, #4338ca, #2563eb);
+  background-size: 200%;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 15px rgba(79, 70, 229, 0.4);
+  margin-bottom: 20px;
+}
+
+.population-sim-btn:hover {
+  background-position: right;
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.7);
+  transform: scale(1.05);
+}
+
+.population-sim-btn:active {
+  transform: scale(0.95);
+}
+
+.population-sim-btn .glow {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #a78bfa, #60a5fa);
+  filter: blur(25px);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: -1;
+}
+
+.population-sim-btn:hover .glow {
+  opacity: 0.3;
+}
+
+.rounded-corners {
+  border-radius: 15px;
 }
