@@ -53,6 +53,26 @@ axis tight off;
 set(gca, 'YDir', 'reverse', 'Color', 'k');
 set(gcf, 'Color', 'k');
 
+% hold on;
+% 
+% % Randomly pick some points (e.g. 200)
+% numSel = 200;
+% selIdx = randperm(numel(x), numSel);
+% xs = x(selIdx);
+% ys = y(selIdx);
+% 
+% % Compute smooth boundary (concave hull)
+% % 0.1 = tight blob, 1 = convex
+% k = boundary(xs, ys, 0.3);
+% 
+% % Draw blob behind scatter points
+% fill(xs(k), ys(k), [0 1 0], ...
+%     'FaceAlpha', 0.3, ...
+%     'EdgeColor', 'none', ...
+%     'HandleVisibility', 'off');
+% 
+% uistack(sim.h, 'top'); % ensures dots are drawn on top
+
 % Control Buttons
 btnPause = uibutton(sim.fig, 'push', ...
     'Text', 'Pause', ...
@@ -112,6 +132,8 @@ sim.infected = zeros(ROWS, COLS, 'gpuArray');
 randIdx = randi(numel(pop));                  % pick random valid index
 linearIdx = sim.valid_idx(randIdx);               % map back to population grid
 [randRow, randCol] = ind2sub(size(data), linearIdx);
+randRow = 226;
+randCol = 863;
 
 % Infect a small local region around that cell
 sim.r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1;
@@ -242,9 +264,22 @@ function runTick()
     sim.currentBatch = mod(sim.currentBatch, sim.numChunks) + 1;
     
     % Occasionally redraw for performance balance
-    if mod(sim.iter, 4) == 0
+    if mod(sim.iter, 5) == 0
         drawnow limitrate;
-        imwrite(getframe(sim.fig).cdata, fullfile(sim.scriptDir, sprintf('my-react-app/public/frame.jpg')), 'jpg');
+
+        % Combine and normalize
+        rgbData = cat(3, sim.r, sim.g, sim.b);
+        rgbData = gather(rgbData);
+        rgbData = uint8(255 * mat2gray(rgbData));
+        
+        sz = size(rgbData);
+        scriptDir = fileparts(mfilename('fullpath'));
+        
+        binFile = fullfile(scriptDir, 'backend', 'earthdata_rgb.bin');
+        fid = fopen(binFile, 'w');
+        fwrite(fid, [sz(1), sz(2)], 'uint32');  % dimensions header
+        fwrite(fid, permute(rgbData, [3 1 2]), 'uint8');  % RGB interleaved
+        fclose(fid);
     end
     
     % Monitor ticks per second
