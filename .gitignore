@@ -13,7 +13,16 @@ node_modules
 dist
 dist-ssr
 *.local
+
+# Sim Output Files
 /v-0.2-earthdata/my-react-app/public/frame.jpg
+/v-0.2-earthdata/backend/earthdata_rgb.bin
+/v-0.2-earthdata/backend/sim_frame.bin
+
+# Environment files
+.env
+backend.env
+*.env
 
 # Editor directories and files
 .vscode/*
