@@ -61,8 +61,8 @@ function restart()
 
     paused = true;
 
-    randRow = randi(ROWS)
-    randCol = randi(COLS)
+    randRow = randi(ROWS);
+    randCol = randi(COLS);
     
     r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1; % Initial intensity
     
@@ -108,8 +108,53 @@ sizeGrid = reshape(dotSizes, ROWS, COLS) / 67; % scale down
 
 % Plot
 fig = figure;
+hold on;
+
+% === Draw herd immunity blobs FIRST ===
+numImmune = 67;
+immuneIdx = randperm(length(x), numImmune);
+blobSize = 0.5 + (dotSizes(immuneIdx) / max(dotSizes)) * 0.3;
+
+% Coordinates of selected dots
+Xsel = x(immuneIdx);
+Ysel = y(immuneIdx);
+
+% --- Cluster nearby selected dots ---
+minDist = 2; % distance threshold — tweak until blobs connect naturally
+D = squareform(pdist([Xsel Ysel]));
+G = graph(D < minDist);
+bins = conncomp(G);
+
+hold on;
+for c = 1:max(bins)
+    idx = find(bins == c);
+    if numel(idx) < 3, continue; end % need at least 3 points for hull
+
+    cx = Xsel(idx);
+    cy = Ysel(idx);
+    cs = blobSize(idx);
+
+    % collect perimeter samples around each point
+    allX = [];
+    allY = [];
+    for i = 1:numel(idx)
+        t = linspace(0, 2*pi, 16);
+        allX = [allX, cx(i) + cs(i)*cos(t)];
+        allY = [allY, cy(i) + cs(i)*sin(t)];
+    end
+
+    % use alpha shape for nice merging
+    shp = alphaShape(allX', allY', 1.5);
+    plot(shp, 'FaceColor', [0 1 0], 'FaceAlpha', 0.5, 'EdgeColor', 'none');
+end
+
 h = scatter(x, y, dotSizes, ones(length(x),3), 'filled'); % start white
+
+hold off;
 axis off;
+set(gca, 'YDir', 'reverse', 'Color', 'k');
+set(gcf, 'Color', 'k');
+
 tStart = tic;
 
 % Control Buttons
@@ -133,6 +178,7 @@ btnRestart = uibutton(fig, 'push', ...
     'Position', [320, 20, 100, 30], ...
     'ButtonPushedFcn', @(src,event) restart());
 
+
 paused = false;
 
 r = zeros(ROWS, COLS);
@@ -144,25 +190,13 @@ d = zeros(ROWS, COLS);
 e = zeros(ROWS, COLS);
 e_history = zeros(ROWS, COLS, SICKEN_RATE);
 
-% Initialize data tools
-rowsX = h.DataTipTemplate.DataTipRows(1);
-rowsY = h.DataTipTemplate.DataTipRows(2);
-susceptibleRow = dataTipTextRow('Susceptible', g(:));
-exposedRow = dataTipTextRow('Exposed', e(:));
-infectedRow = dataTipTextRow('Infected', r(:));
-recoveredRow = dataTipTextRow('Recovered', b(:));
-deadRow = dataTipTextRow('Dead', d(:));
-
 sickened = zeros(ROWS, COLS);
 healed = zeros(ROWS, COLS);
 infected = zeros(ROWS, COLS);
 
-% Apply them all
-h.DataTipTemplate.DataTipRows = [rowsX, rowsY, susceptibleRow, exposedRow, infectedRow, recoveredRow, deadRow];
-
 % Pick one random cell
-randRow = randi(ROWS)
-randCol = randi(COLS)
+randRow = randi(ROWS);
+randCol = randi(COLS);
 
 r(max(randRow-1, 1):min(randRow+1, ROWS), max(randCol-1, 1):min(randCol+1, COLS)) = 0.1; % Initial intensity
 
@@ -181,7 +215,7 @@ while true
         continue;
     end
 
-    iter = iter + 1  % Increment iteration counter
+    iter = iter + 1;  % Increment iteration counter
 
     r_history = cat(3, sickened, r_history(:,:,1:HEAL_RATE - 1));
     b_history = cat(3, healed, b_history(:,:,1:IMMUNITY_LOSS_RATE - 1));
@@ -214,18 +248,11 @@ while true
     h.CData = [r(:), g(:), b(:)] .* (1 - d(:)); % darker if more dead
     drawnow;
 
-    % Update data tips for the current iteration
-    h.DataTipTemplate.DataTipRows(3).Value = g(:) * 100; 
-    h.DataTipTemplate.DataTipRows(4).Value = e(:) * 100; 
-    h.DataTipTemplate.DataTipRows(5).Value = r(:) * 100; 
-    h.DataTipTemplate.DataTipRows(6).Value = b(:) * 100;
-    h.DataTipTemplate.DataTipRows(7).Value = d(:) * 100; 
-
     totals = 100 * [sum(r(:)), sum(g(:)), sum(b(:)), sum(e(:)), sum(d(:))];
 
     title(sprintf('R: %.1f   G: %.1f   B: %.1f   E: %.1f   D: %.1f', ...
     totals(1), totals(2), totals(3), totals(4), totals(5)), ...
-    'FontSize', 12, 'FontWeight', 'bold');
+    'FontSize', 12, 'FontWeight', 'bold', 'Color', 'w');
 
     if mod(iter,10)==0
         fprintf('Iter: %d | Iter/s: %.2f\n', iter, 10/toc(tStart));
@@ -233,6 +260,22 @@ while true
     end
 
     if mod(iter, 3) == 0
-        imwrite(getframe(fig).cdata, fullfile(scriptDir, sprintf('frame.jpg')), 'jpg');
+        rgbData = cat(3, r, g, b);      % combine into 3D array
+        rgbData = gather(rgbData);      % in case on GPU
+        rgbData = uint8(255 * mat2gray(rgbData));  % normalize to 0–255
+        
+        % Reshape into JSON-ready structure: a cell array of rows of RGB triplets
+        sz = size(rgbData);
+        rgbCells = mat2cell(reshape(permute(rgbData, [1 2 3]), sz(1), sz(2), 3), ...
+                            ones(sz(1),1), sz(2), 3);
+        jsonStr = jsonencode(rgbCells);
+        
+        % Save next to script
+        scriptDir = fileparts(mfilename('fullpath'));
+        jsonFile = fullfile(scriptDir, 'earthdata_rgb.json');
+        fid = fopen(jsonFile, 'w');
+        fwrite(fid, jsonStr, 'char');
+        fclose(fid);
+        disp(['JSON saved: ' jsonFile]);
     end
 end
