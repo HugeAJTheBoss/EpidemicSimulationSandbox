@@ -11,10 +11,14 @@ const supabase = createClient(
 
 const bucket = process.env.BUCKET_NAME;
 
+const downloadInterval = 50; // ms
+
+let downloadCount = 0;
+let startTime = Date.now();
+
 async function downloadSpecific() {
   const fileName = "sim_frame.bin";
 
-  // Download the file
   const { data: fileData, error } = await supabase.storage
     .from(bucket)
     .download(fileName);
@@ -24,11 +28,17 @@ async function downloadSpecific() {
     return;
   }
 
-  // Convert to buffer + save locally
   const buffer = Buffer.from(await fileData.arrayBuffer());
   fs.writeFileSync(`./${fileName}`, buffer);
 
-  console.log(`Downloaded and saved locally as ${fileName}`);
+  downloadCount++;
+
+  // Every 10 downloads, print downloads/sec
+  if (downloadCount % 10 === 0) {
+    const elapsed = (Date.now() - startTime) / 1000; // seconds
+    const dps = (downloadCount / elapsed).toFixed(2);
+    console.log(`Downloads per second: ${dps}`);
+  }
 }
 
-downloadSpecific();
+setInterval(downloadSpecific, downloadInterval);

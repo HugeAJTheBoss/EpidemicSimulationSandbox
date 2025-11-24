@@ -2,10 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
 import dotenv from "dotenv";
 
-// Load backend.env
-dotenv.config({ path: "./backend.env" });
+// Load frontend.env
+dotenv.config({ path: "./frontend.env" });
 
-// Create Supabase client using YOUR variable names
+// Create Supabase client
 const supabase = createClient(
   process.env.PROJECT_URL,
   process.env.API_KEY
@@ -13,30 +13,40 @@ const supabase = createClient(
 
 const bucket = process.env.BUCKET_NAME;
 
-// Path to the .bin file
-const filePath = "./earthdata_rgb.bin";
+// Load the JSON file once
+const filePath = "./settings.json";
 const fileBuffer = fs.readFileSync(filePath);
 
 console.log("Loaded file:", filePath);
 
-// Upload every 250ms
-const uploadInterval = 250;
+// Upload interval
+const uploadInterval = 60;
+
+let uploadCount = 0;
+let startTime = Date.now();
 
 async function uploadFile() {
   try {
-    const timestamp = Date.now();
-    const fileName = `sim_frame.bin`;
+    const fileName = "settings.json";
 
     const { error } = await supabase.storage
       .from(bucket)
       .upload(fileName, fileBuffer, {
-        contentType: "application/octet-stream",
+        contentType: "application/json",
         upsert: true
       });
 
     if (error) throw error;
 
-    console.log(`✅ Uploaded: ${fileName}`);
+    uploadCount++;
+
+    // Every 10 uploads → report uploads/sec
+    if (uploadCount % 10 === 0) {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const ups = (uploadCount / elapsed).toFixed(2);
+      console.log(`Uploads per second: ${ups}`);
+    }
+
   } catch (err) {
     console.error("❌ Upload error:", err.message);
   }
