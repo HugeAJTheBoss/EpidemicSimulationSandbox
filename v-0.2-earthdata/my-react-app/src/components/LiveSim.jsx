@@ -8,8 +8,8 @@ export default function LiveSim() {
       alt="SimulationVisual"
       className="rounded-corners"
       onError={(e) => {
-        e.target.onerror = null
-        e.target.src = 'tanayrequest.jpg'
+        e.target.onerror = null;
+        e.target.src = 'tanayrequest.jpg';
       }}
     />
   );
