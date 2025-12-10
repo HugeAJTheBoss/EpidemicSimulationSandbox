@@ -48,7 +48,7 @@
   
   <div class="setup">
     <strong>Server URL:</strong><br>
-    <input type="text" id="serverUrl" value="wss://your-app.onrender.com" placeholder="wss://your-app.onrender.com">
+    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com/" placeholder="https://epidemicsimulationsandbox.onrender.com/">
     <p style="font-size: 12px; color: #666;">Auto-connects on page load. Just open this page and wait!</p>
   </div>
   
@@ -108,7 +108,7 @@
           log('Registered as receiver, waiting for sender...');
         } else if (data.type === 'waiting') {
           log('Waiting for a sender to connect...');
-          document.getElementById('status').textContent = '⏳ Waiting for sender...';
+          document.getElementById('status').textContent = 'Waiting for sender...';
         } else if (data.type === 'paired') {
           peerId = data.peerId;
           log(`✓ Paired with sender: ${peerId}`);
@@ -125,12 +125,12 @@
       
       signalingWs.onerror = (err) => {
         log('Signaling error - check server URL');
-        document.getElementById('status').textContent = '❌ Connection error';
+        document.getElementById('status').textContent = 'Connection error';
       };
       
       signalingWs.onclose = () => {
         log('Disconnected from signaling server');
-        document.getElementById('status').textContent = '❌ Disconnected';
+        document.getElementById('status').textContent = 'Disconnected';
         
         // Auto-reconnect after 3 seconds
         setTimeout(() => {
@@ -151,7 +151,7 @@
         
         dataChannel.onopen = () => {
           log('✓ Data channel opened! Receiving data...');
-          document.getElementById('status').textContent = '✓ Receiving Data';
+          document.getElementById('status').textContent = 'Receiving Data';
           document.getElementById('status').className = 'status connected';
         };
         
