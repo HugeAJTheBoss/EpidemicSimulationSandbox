@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>EarthData Receiver (Chunked)</title>
+  <title>EarthData Receiver (Auto-Connect)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -10,21 +10,19 @@
       padding: 20px;
     }
     .status {
-      padding: 15px;
-      margin: 10px 0;
-      border-radius: 5px;
-      background: #f0f0f0;
-      font-size: 18px;
-      font-weight: bold;
-    }
-    .connected { background: #d4edda; }
-    #myId {
-      background: #fff3cd;
       padding: 20px;
       margin: 20px 0;
-      border: 3px solid #ffc107;
+      border-radius: 5px;
+      background: #f0f0f0;
       font-size: 24px;
       text-align: center;
+    }
+    .connected { background: #d4edda; color: #155724; }
+    .waiting { background: #fff3cd; color: #856404; }
+    input {
+      padding: 10px;
+      width: 400px;
+      font-size: 14px;
     }
     #log {
       background: #000;
@@ -35,17 +33,23 @@
       font-family: monospace;
       margin-top: 20px;
     }
+    .setup {
+      background: #e7f3ff;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+    }
   </style>
 </head>
 <body>
-  <h1>EarthData Receiver (Chunked)</h1>
+  <h1>EarthData Receiver (Auto-Connect)</h1>
   
   <div class="status" id="status">Connecting...</div>
   
-  <div id="myId" style="display:none;">
-    <div>YOUR ID:</div>
-    <div id="idText" style="color: #d9534f;"></div>
-    <div style="font-size: 14px; margin-top: 10px;">Copy this ID and paste it in the sender!</div>
+  <div class="setup">
+    <strong>Server URL:</strong><br>
+    <input type="text" id="serverUrl" value="wss://your-app.onrender.com" placeholder="wss://your-app.onrender.com">
+    <p style="font-size: 12px; color: #666;">Auto-connects on page load. Just open this page and wait!</p>
   </div>
   
   <div id="log"></div>
@@ -55,11 +59,12 @@
     let peerConnection = null;
     let dataChannel = null;
     let myId = null;
+    let peerId = null;
     
-    // Chunk reassembly
     let currentFrame = null;
     let receivedChunks = [];
     let expectedChunks = 0;
+    let expectingHeader = true;
 
     function log(msg) {
       const logDiv = document.getElementById('log');
@@ -69,12 +74,23 @@
       console.log(msg);
     }
 
+    // Auto-connect on page load
+    window.onload = () => {
+      connect();
+    };
+
     async function connect() {
-      signalingWs = new WebSocket('ws://localhost:8080');
+      const serverUrl = document.getElementById('serverUrl').value;
+      
+      log('Connecting to signaling server...');
+      document.getElementById('status').textContent = 'Connecting...';
+      
+      signalingWs = new WebSocket(serverUrl);
       
       signalingWs.onopen = () => {
-        log('Connected to signaling server');
-        document.getElementById('status').textContent = 'Connected - Waiting for ID...';
+        log('✓ Connected to signaling server');
+        document.getElementById('status').textContent = 'Waiting for sender...';
+        document.getElementById('status').className = 'status waiting';
       };
       
       signalingWs.onmessage = async (event) => {
@@ -83,10 +99,20 @@
         if (data.type === 'id') {
           myId = data.id;
           log(`My ID: ${myId}`);
-          document.getElementById('status').textContent = 'Ready to receive';
-          document.getElementById('status').className = 'status connected';
-          document.getElementById('myId').style.display = 'block';
-          document.getElementById('idText').textContent = myId;
+          
+          // Register as receiver - automatic matching
+          signalingWs.send(JSON.stringify({
+            type: 'register',
+            role: 'receiver'
+          }));
+          log('Registered as receiver, waiting for sender...');
+        } else if (data.type === 'waiting') {
+          log('Waiting for a sender to connect...');
+          document.getElementById('status').textContent = '⏳ Waiting for sender...';
+        } else if (data.type === 'paired') {
+          peerId = data.peerId;
+          log(`✓ Paired with sender: ${peerId}`);
+          document.getElementById('status').textContent = 'Paired! Establishing connection...';
         } else if (data.type === 'offer') {
           log('Received offer from sender');
           await handleOffer(data.from, data.payload);
@@ -98,13 +124,23 @@
       };
       
       signalingWs.onerror = (err) => {
-        log('Signaling error: ' + err);
+        log('Signaling error - check server URL');
+        document.getElementById('status').textContent = '❌ Connection error';
+      };
+      
+      signalingWs.onclose = () => {
+        log('Disconnected from signaling server');
+        document.getElementById('status').textContent = '❌ Disconnected';
+        
+        // Auto-reconnect after 3 seconds
+        setTimeout(() => {
+          log('Attempting to reconnect...');
+          connect();
+        }, 3000);
       };
     }
 
     async function handleOffer(senderId, offer) {
-      log('Setting up peer connection...');
-      
       peerConnection = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       });
@@ -114,31 +150,24 @@
         dataChannel.binaryType = 'arraybuffer';
         
         dataChannel.onopen = () => {
-          log('Data channel opened! Ready to receive earthdata.bin');
-          document.getElementById('status').textContent = 'Receiving data...';
+          log('✓ Data channel opened! Receiving data...');
+          document.getElementById('status').textContent = '✓ Receiving Data';
           document.getElementById('status').className = 'status connected';
         };
-        
-        let expectingHeader = true;
         
         dataChannel.onmessage = (event) => {
           const data = event.data;
           
           if (expectingHeader) {
-            // This is a header with frame info
             const header = new Uint32Array(data);
             const frameNum = header[0];
             const chunkIndex = header[1];
             const totalChunks = header[2];
             
-            // New frame?
             if (currentFrame !== frameNum) {
-              // Process previous frame if exists
               if (receivedChunks.length > 0) {
                 reassembleFrame();
               }
-              
-              // Start new frame
               currentFrame = frameNum;
               receivedChunks = [];
               expectedChunks = totalChunks;
@@ -146,10 +175,8 @@
             
             expectingHeader = false;
           } else {
-            // This is chunk data
             receivedChunks.push(new Uint8Array(data));
             
-            // Got all chunks for this frame?
             if (receivedChunks.length === expectedChunks) {
               reassembleFrame();
             }
@@ -160,10 +187,8 @@
         
         dataChannel.onclose = () => {
           log('Data channel closed');
-        };
-        
-        dataChannel.onerror = (err) => {
-          log('Data channel error: ' + err);
+          document.getElementById('status').textContent = 'Connection closed';
+          document.getElementById('status').className = 'status waiting';
         };
       };
       
@@ -187,14 +212,11 @@
         payload: answer
       }));
       
-      log('Answer sent back to sender');
+      log('Answer sent to sender');
     }
 
     function reassembleFrame() {
-      // Calculate total size
       const totalSize = receivedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-      
-      // Combine all chunks
       const completeData = new Uint8Array(totalSize);
       let offset = 0;
       for (const chunk of receivedChunks) {
@@ -202,28 +224,20 @@
         offset += chunk.length;
       }
       
-      log(`Frame ${currentFrame}: Reassembled ${receivedChunks.length} chunks (${totalSize} bytes)`);
-      
-      // Process the complete frame
+      log(`Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
       processEarthData(completeData.buffer, currentFrame);
-      
-      // Reset for next frame
       receivedChunks = [];
     }
 
-    // YOUR GAME CODE - Process the binary data
     function processEarthData(arrayBuffer, frameNum) {
+      // YOUR GAME CODE HERE
       const uint8View = new Uint8Array(arrayBuffer);
       
-      log(`Processing frame ${frameNum}: ${arrayBuffer.byteLength} bytes`);
+      // Example: Update your game world with this data
+      // updateGameWorld(uint8View);
+      // renderFrame(uint8View);
       
-      // YOUR CODE HERE:
-      // - Parse the binary data
-      // - Update game state
-      // - Render to canvas
-      // etc.
-      
-      // Save first frame to verify
+      // Save first frame to verify it works
       if (frameNum === 1) {
         downloadAsFile(arrayBuffer, 'received_earthdata.bin');
         log('First frame saved as received_earthdata.bin');
@@ -239,9 +253,6 @@
       a.click();
       URL.revokeObjectURL(url);
     }
-
-    // Start immediately
-    connect();
   </script>
 </body>
 </html>
