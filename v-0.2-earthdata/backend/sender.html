@@ -1,32 +1,71 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>EarthData Sender (Chunked)</title>
+  <title>EarthData Sender - Auto Connect</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       max-width: 800px;
       margin: 50px auto;
       padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
     }
     .status {
-      padding: 15px;
-      margin: 10px 0;
-      border-radius: 5px;
-      background: #f0f0f0;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 20px;
+      text-align: center;
+      border: 2px solid #ddd;
     }
-    .connected { background: #d4edda; }
-    .error { background: #f8d7da; }
+    .connected { 
+      background: #d4edda; 
+      border-color: #28a745;
+      color: #155724;
+    }
+    .waiting { 
+      background: #fff3cd; 
+      border-color: #ffc107;
+      color: #856404;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      margin: 15px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
     button {
-      padding: 10px 20px;
+      padding: 12px 24px;
       font-size: 16px;
       margin: 5px;
       cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background: #007bff;
+      color: white;
     }
-    input {
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    input[type="text"] {
       padding: 10px;
-      width: 300px;
+      width: 100%;
       font-size: 14px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    input[type="file"] {
+      margin: 10px 0;
     }
     #log {
       background: #000;
@@ -34,38 +73,40 @@
       padding: 15px;
       height: 300px;
       overflow-y: auto;
-      font-family: monospace;
+      font-family: 'Courier New', monospace;
       margin-top: 20px;
+      border-radius: 5px;
+      font-size: 13px;
+    }
+    .file-info {
+      margin: 10px 0;
+      padding: 10px;
+      background: #e7f3ff;
+      border-radius: 5px;
     }
   </style>
 </head>
 <body>
-  <h1>EarthData Sender (Chunked - 10fps)</h1>
+  <h1>EarthData Sender (Auto-Connect)</h1>
   
-  <div class="status" id="status">Not connected</div>
+  <div class="status" id="status">Ready to start</div>
   
-  <div>
-    <h3>Step 1: Load earthdata.bin</h3>
+  <div class="card">
+    <h3>Step 1: Server URL</h3>
+    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com/" placeholder="https://epidemicsimulationsandbox.onrender.com/">
+  </div>
+  
+  <div class="card">
+    <h3>Step 2: Load earthdata.bin</h3>
     <input type="file" id="fileInput" accept=".bin">
-    <div id="fileInfo"></div>
+    <div class="file-info" id="fileInfo" style="display:none;"></div>
+    <button onclick="startAutoConnect()" id="connectBtn" disabled>Start Broadcasting</button>
   </div>
   
-  <div>
-    <h3>Step 2: Connect to signaling server</h3>
-    <input type="text" id="serverUrl" value="ws://localhost:8080" placeholder="ws://localhost:8080">
-    <button onclick="connectToServer()">Connect</button>
-  </div>
-  
-  <div>
-    <h3>Step 3: Enter receiver's ID</h3>
-    <input type="text" id="receiverId" placeholder="Paste receiver ID here">
-    <button onclick="createConnection()" id="connectBtn" disabled>Connect to Receiver</button>
-  </div>
-  
-  <div>
-    <h3>Step 4: Send data</h3>
-    <button onclick="startSending()" id="sendBtn" disabled>Start Sending (10fps)</button>
-    <button onclick="stopSending()" id="stopBtn" disabled>Stop</button>
+  <div class="card">
+    <h3>Controls</h3>
+    <button onclick="startSending()" id="sendBtn" disabled>▶ Start Sending (10fps)</button>
+    <button onclick="stopSending()" id="stopBtn" disabled>⏸ Stop</button>
   </div>
   
   <div id="log"></div>
@@ -75,11 +116,12 @@
     let peerConnection = null;
     let dataChannel = null;
     let myId = null;
+    let peerId = null;
     let fileData = null;
     let sendInterval = null;
     let frameCount = 0;
     
-    const CHUNK_SIZE = 16384; // 16KB chunks
+    const CHUNK_SIZE = 16384;
 
     function log(msg) {
       const logDiv = document.getElementById('log');
@@ -89,7 +131,6 @@
       console.log(msg);
     }
 
-    // Step 1: Load file
     document.getElementById('fileInput').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -97,23 +138,33 @@
       const reader = new FileReader();
       reader.onload = (event) => {
         fileData = event.target.result;
-        document.getElementById('fileInfo').innerHTML = 
-          `✓ Loaded: ${file.name} (${fileData.byteLength.toLocaleString()} bytes)`;
+        const fileInfoDiv = document.getElementById('fileInfo');
+        fileInfoDiv.style.display = 'block';
+        fileInfoDiv.innerHTML = `✓ Loaded: <strong>${file.name}</strong> (${(fileData.byteLength / 1024 / 1024).toFixed(2)} MB)`;
+        document.getElementById('connectBtn').disabled = false;
         log(`File loaded: ${fileData.byteLength} bytes`);
       };
       reader.readAsArrayBuffer(file);
     });
 
-    // Step 2: Connect to signaling server
-    async function connectToServer() {
+    async function startAutoConnect() {
+      if (!fileData) {
+        alert('Please load earthdata.bin first!');
+        return;
+      }
+      
       const serverUrl = document.getElementById('serverUrl').value;
+      
+      document.getElementById('connectBtn').disabled = true;
+      log('Connecting to signaling server...');
+      document.getElementById('status').textContent = 'Connecting...';
       
       signalingWs = new WebSocket(serverUrl);
       
       signalingWs.onopen = () => {
-        log('Connected to signaling server');
-        document.getElementById('status').textContent = 'Connected to server';
-        document.getElementById('status').className = 'status connected';
+        log('✓ Connected to signaling server');
+        document.getElementById('status').textContent = 'Looking for receiver...';
+        document.getElementById('status').className = 'status waiting';
       };
       
       signalingWs.onmessage = async (event) => {
@@ -122,37 +173,42 @@
         if (data.type === 'id') {
           myId = data.id;
           log(`My ID: ${myId}`);
-          document.getElementById('connectBtn').disabled = false;
+          
+          // Register as sender - automatic matching
+          signalingWs.send(JSON.stringify({
+            type: 'register',
+            role: 'sender'
+          }));
+          log('Registered as sender, waiting for receiver...');
+        } else if (data.type === 'waiting') {
+          log('Waiting for a receiver to connect...');
+          document.getElementById('status').textContent = '⏳ Waiting for receiver...';
+        } else if (data.type === 'paired') {
+          peerId = data.peerId;
+          log(`✓ Paired with receiver: ${peerId}`);
+          document.getElementById('status').textContent = 'Paired! Creating connection...';
+          await createConnection();
         } else if (data.type === 'answer') {
           await peerConnection.setRemoteDescription(data.payload);
-          log('Received answer from receiver');
+          log('✓ Received answer from receiver');
         } else if (data.type === 'ice-candidate') {
           await peerConnection.addIceCandidate(data.payload);
         }
       };
       
       signalingWs.onerror = (err) => {
-        log('Signaling error: ' + err);
-        document.getElementById('status').textContent = 'Connection error';
-        document.getElementById('status').className = 'status error';
+        log('❌ Signaling error - check server URL');
+        document.getElementById('connectBtn').disabled = false;
+        document.getElementById('status').textContent = '❌ Connection error';
+      };
+      
+      signalingWs.onclose = () => {
+        log('Disconnected from signaling server');
+        document.getElementById('connectBtn').disabled = false;
       };
     }
 
-    // Step 3: Create WebRTC connection
     async function createConnection() {
-      if (!fileData) {
-        alert('Please load earthdata.bin first!');
-        return;
-      }
-      
-      const receiverId = document.getElementById('receiverId').value.trim();
-      if (!receiverId) {
-        alert('Please enter receiver ID!');
-        return;
-      }
-      
-      log(`Creating connection to: ${receiverId}`);
-      
       peerConnection = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       });
@@ -165,8 +221,8 @@
       dataChannel.binaryType = 'arraybuffer';
       
       dataChannel.onopen = () => {
-        log('Data channel opened!');
-        document.getElementById('status').textContent = 'Connected to receiver - Ready to send';
+        log('✓ Data channel opened!');
+        document.getElementById('status').textContent = '✓ Connected - Ready to send';
         document.getElementById('status').className = 'status connected';
         document.getElementById('sendBtn').disabled = false;
       };
@@ -175,11 +231,12 @@
         log('Data channel closed');
         stopSending();
         document.getElementById('sendBtn').disabled = true;
-        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('status').textContent = 'Disconnected';
+        document.getElementById('status').className = 'status';
       };
       
       dataChannel.onerror = (err) => {
-        log('Data channel error: ' + err);
+        log('Data channel error');
         stopSending();
       };
       
@@ -187,7 +244,7 @@
         if (event.candidate) {
           signalingWs.send(JSON.stringify({
             type: 'ice-candidate',
-            target: receiverId,
+            target: peerId,
             payload: event.candidate
           }));
         }
@@ -198,14 +255,13 @@
       
       signalingWs.send(JSON.stringify({
         type: 'offer',
-        target: receiverId,
+        target: peerId,
         payload: offer
       }));
       
       log('Offer sent to receiver');
     }
 
-    // Step 4: Start sending with chunking
     function startSending() {
       if (!dataChannel || dataChannel.readyState !== 'open') {
         alert('Data channel not ready!');
@@ -213,11 +269,11 @@
       }
       
       frameCount = 0;
-      log('Starting to send at 10fps with 16KB chunks...');
+      log('▶ Starting to send at 10fps...');
       document.getElementById('sendBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
+      document.getElementById('status').textContent = '📡 Broadcasting...';
       
-      // Wait before starting
       setTimeout(() => {
         sendInterval = setInterval(async () => {
           if (dataChannel.readyState !== 'open') {
@@ -228,18 +284,16 @@
           
           frameCount++;
           await sendFrameInChunks(frameCount);
-          
-        }, 100); // 10fps
+        }, 100);
       }, 500);
     }
 
     async function sendFrameInChunks(frameNum) {
       const totalChunks = Math.ceil(fileData.byteLength / CHUNK_SIZE);
       let chunksSent = 0;
-      const MAX_BUFFER = 1024 * 1024; // 1MB buffer limit
+      const MAX_BUFFER = 1024 * 1024;
       
       for (let offset = 0; offset < fileData.byteLength; offset += CHUNK_SIZE) {
-        // Wait if buffer is too full
         while (dataChannel.bufferedAmount > MAX_BUFFER) {
           await new Promise(resolve => setTimeout(resolve, 10));
         }
@@ -247,30 +301,28 @@
         const chunk = fileData.slice(offset, Math.min(offset + CHUNK_SIZE, fileData.byteLength));
         
         try {
-          // Send header: [frameNum, chunkIndex, totalChunks]
           const header = new Uint32Array([frameNum, chunksSent, totalChunks]);
           dataChannel.send(header.buffer);
-          
-          // Send chunk data
           dataChannel.send(chunk);
           chunksSent++;
         } catch (err) {
-          log(`Send error: ${err.message}`);
+          log(`❌ Send error: ${err.message}`);
           stopSending();
           return;
         }
       }
       
-      log(`Frame ${frameNum} sent: ${totalChunks} chunks (${fileData.byteLength} bytes)`);
+      log(`Frame ${frameNum} sent (${totalChunks} chunks)`);
     }
 
     function stopSending() {
       if (sendInterval) {
         clearInterval(sendInterval);
         sendInterval = null;
-        log('Stopped sending');
+        log('⏸ Stopped sending');
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('stopBtn').disabled = true;
+        document.getElementById('status').textContent = '✓ Connected - Ready to send';
       }
     }
   </script>
