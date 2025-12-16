@@ -40,3 +40,15 @@ Notes:
   - `GET /api/ping` — returns server status and whether MATLAB engine is available
   - `POST /api/run_population` — accepts JSON {rows, cols} and returns a mock population matrix when MATLAB is unavailable
   - `POST /api/run_person` — accepts JSON {steps} and returns a mock timeline when MATLAB is unavailable
+
+Frontend static assets (Vite)
+--------------------------------
+If you want the frontend dev server (Vite) to serve simulation binaries and GeoTIFFs directly, copy them into the React app's `public/` folder. Example (from project root):
+
+```bash
+cp v-0.2-earthdata/backend/sim_frame.bin v-0.2-earthdata/my-react-app/public/
+cp v-0.2-earthdata/backend/population.tif v-0.2-earthdata/my-react-app/public/
+# Then in the React app you can fetch '/sim_frame.bin' and '/population.tif'
+```
+
+Alternatively, leave the files where they are and add a small backend endpoint to serve them if you prefer not to duplicate files.
