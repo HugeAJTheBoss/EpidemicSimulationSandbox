@@ -140,7 +140,7 @@
         fileData = event.target.result;
         const fileInfoDiv = document.getElementById('fileInfo');
         fileInfoDiv.style.display = 'block';
-        fileInfoDiv.innerHTML = `✓ Loaded: <strong>${file.name}</strong> (${(fileData.byteLength / 1024 / 1024).toFixed(2)} MB)`;
+        fileInfoDiv.innerHTML = `Loaded: <strong>${file.name}</strong> (${(fileData.byteLength / 1024 / 1024).toFixed(2)} MB)`;
         document.getElementById('connectBtn').disabled = false;
         log(`File loaded: ${fileData.byteLength} bytes`);
       };
@@ -162,7 +162,7 @@
       signalingWs = new WebSocket(serverUrl);
       
       signalingWs.onopen = () => {
-        log('✓ Connected to signaling server');
+        log('Connected to signaling server');
         document.getElementById('status').textContent = 'Looking for receiver...';
         document.getElementById('status').className = 'status waiting';
       };
@@ -185,19 +185,19 @@
           document.getElementById('status').textContent = '⏳ Waiting for receiver...';
         } else if (data.type === 'paired') {
           peerId = data.peerId;
-          log(`✓ Paired with receiver: ${peerId}`);
+          log(`Paired with receiver: ${peerId}`);
           document.getElementById('status').textContent = 'Paired! Creating connection...';
           await createConnection();
         } else if (data.type === 'answer') {
           await peerConnection.setRemoteDescription(data.payload);
-          log('✓ Received answer from receiver');
+          log('Received answer from receiver');
         } else if (data.type === 'ice-candidate') {
           await peerConnection.addIceCandidate(data.payload);
         }
       };
       
       signalingWs.onerror = (err) => {
-        log('❌ Signaling error - check server URL');
+        log('Signaling error - check server URL');
         document.getElementById('connectBtn').disabled = false;
         document.getElementById('status').textContent = '❌ Connection error';
       };
@@ -210,13 +210,41 @@
 
     async function createConnection() {
       peerConnection = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          {
+            urls: [
+              'turn:openrelay.metered.ca:80',
+              'turn:openrelay.metered.ca:443',
+              'turns:openrelay.metered.ca:443'
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ]
       });
+
+      peerConnection.oniceconnectionstatechange = () => {
+        log("ICE state: " + peerConnection.iceConnectionState);
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        log("Connection state: " + peerConnection.connectionState);
+      };
       
-      dataChannel = peerConnection.createDataChannel('gameData', {
-        ordered: false,
-        maxRetransmits: 0
+      dataChannel = peerConnection.createDataChannel("earthdata", {
+        ordered: true
       });
+
+      dataChannel.binaryType = "arraybuffer";
+
+      dataChannel.onopen = () => {
+        log("Data channel opened");
+      };
+
+      dataChannel.onclose = () => {
+        log("Data channel closed");
+      };
       
       dataChannel.binaryType = 'arraybuffer';
       
@@ -306,7 +334,7 @@
           dataChannel.send(chunk);
           chunksSent++;
         } catch (err) {
-          log(`❌ Send error: ${err.message}`);
+          log(`Send error: ${err.message}`);
           stopSending();
           return;
         }
