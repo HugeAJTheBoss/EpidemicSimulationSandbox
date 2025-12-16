@@ -1,277 +1,134 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>EarthData Receiver (Auto-Connect)</title>
+  <title>EarthData Receiver - WebSocket</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: 50px auto;
-      padding: 20px;
+    body { 
+      font-family: Arial; 
+      max-width: 800px; 
+      margin: 50px auto; 
+      padding: 20px; 
     }
-    .status {
-      padding: 20px;
-      margin: 20px 0;
-      border-radius: 5px;
-      background: #f0f0f0;
-      font-size: 24px;
-      text-align: center;
+    .status { 
+      padding: 20px; 
+      margin: 20px 0; 
+      border-radius: 8px; 
+      font-size: 20px; 
+      text-align: center; 
+      border: 2px solid #ddd; 
     }
-    .connected { background: #d4edda; color: #155724; }
-    .waiting { background: #fff3cd; color: #856404; }
-    input {
-      padding: 10px;
-      width: 400px;
-      font-size: 14px;
+    .connected { 
+      background: #d4edda; 
+      border-color: #28a745; 
+      color: #155724; 
     }
-    #log {
-      background: #000;
-      color: #0f0;
-      padding: 15px;
-      height: 400px;
-      overflow-y: auto;
+    .waiting { 
+      background: #fff3cd; 
+      border-color: #ffc107; 
+      color: #856404; 
+    }
+    #log { 
+      background: #000; 
+      color: #0f0; 
+      padding: 15px; 
+      height: 300px; 
+      overflow-y: auto; 
       font-family: monospace;
-      margin-top: 20px;
-    }
-    .setup {
-      background: #e7f3ff;
-      padding: 15px;
-      border-radius: 5px;
-      margin: 20px 0;
+      margin-top: 20px; 
+      font-size: 13px; 
     }
   </style>
 </head>
 <body>
-  <h1>EarthData Receiver (Auto-Connect)</h1>
-  
-  <div class="status" id="status">Connecting...</div>
-  
-  <div class="setup">
-    <strong>Server URL:</strong><br>
-    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com/" placeholder="https://epidemicsimulationsandbox.onrender.com/">
-    <p style="font-size: 12px; color: #666;">Auto-connects on page load. Just open this page and wait!</p>
-  </div>
-  
-  <div id="log"></div>
+<h1>EarthData Receiver</h1>
+<div class="status waiting" id="status">Connecting...</div>
+<input type="text" id="serverUrl" value="ws://localhost:8080/" style="width:100%;" placeholder="Server URL">
+<div id="log"></div>
 
-  <script>
-    let signalingWs = null;
-    let peerConnection = null;
-    let dataChannel = null;
-    let myId = null;
-    let peerId = null;
-    
-    let currentFrame = null;
-    let receivedChunks = [];
-    let expectedChunks = 0;
-    let expectingHeader = true;
+<script>
+let ws = null;
+let currentFrame = null;
+let receivedChunks = [];
+let expectedChunks = 0;
+let expectingHeader = true;
 
-    function log(msg) {
-      const logDiv = document.getElementById('log');
-      const time = new Date().toLocaleTimeString();
-      logDiv.innerHTML += `[${time}] ${msg}\n`;
-      logDiv.scrollTop = logDiv.scrollHeight;
-      console.log(msg);
-    }
+function log(msg) {
+  const div = document.getElementById('log');
+  const t = new Date().toLocaleTimeString();
+  div.innerHTML += `[${t}] ${msg}\n`;
+  div.scrollTop = div.scrollHeight;
+  console.log(msg);
+}
 
-    // Auto-connect on page load
-    window.onload = () => {
-      connect();
-    };
+window.onload = connect;
 
-    async function connect() {
-      const serverUrl = document.getElementById('serverUrl').value;
-      
-      log('Connecting to signaling server...');
-      document.getElementById('status').textContent = 'Connecting...';
-      
-      signalingWs = new WebSocket(serverUrl);
-      
-      signalingWs.onopen = () => {
-        log('✓ Connected to signaling server');
-        document.getElementById('status').textContent = 'Waiting for sender...';
-        document.getElementById('status').className = 'status waiting';
-      };
-      
-      signalingWs.onmessage = async (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'id') {
-          myId = data.id;
-          log(`My ID: ${myId}`);
-          
-          // Register as receiver - automatic matching
-          signalingWs.send(JSON.stringify({
-            type: 'register',
-            role: 'receiver'
-          }));
-          log('Registered as receiver, waiting for sender...');
-        } else if (data.type === 'waiting') {
-          log('Waiting for a sender to connect...');
-          document.getElementById('status').textContent = 'Waiting for sender...';
-        } else if (data.type === 'paired') {
-          peerId = data.peerId;
-          log(`✓ Paired with sender: ${peerId}`);
-          document.getElementById('status').textContent = 'Paired! Establishing connection...';
-        } else if (data.type === 'offer') {
-          log('Received offer from sender');
-          await handleOffer(data.from, data.payload);
-        } else if (data.type === 'ice-candidate') {
-          if (peerConnection) {
-            await peerConnection.addIceCandidate(data.payload);
-          }
-        }
-      };
-      
-      signalingWs.onerror = (err) => {
-        log('Signaling error - check server URL');
-        document.getElementById('status').textContent = 'Connection error';
-      };
-      
-      signalingWs.onclose = () => {
-        log('Disconnected from signaling server');
-        document.getElementById('status').textContent = 'Disconnected';
-        
-        // Auto-reconnect after 3 seconds
-        setTimeout(() => {
-          log('Attempting to reconnect...');
-          connect();
-        }, 3000);
-      };
-    }
+function connect() {
+  const serverUrl = document.getElementById('serverUrl').value;
+  ws = new WebSocket(serverUrl);
+  ws.binaryType = "arraybuffer";
 
-    async function handleOffer(senderId, offer) {
-      peerConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          {
-            urls: [
-              'turn:openrelay.metered.ca:80',
-              'turn:openrelay.metered.ca:443',
-              'turns:openrelay.metered.ca:443'
-            ],
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-          }
-        ]
-      });
+  ws.onopen = () => {
+    log("✓ Connected to server");
+    ws.send(JSON.stringify({ type: "register", role: "receiver" }));
+  };
 
-      peerConnection.oniceconnectionstatechange = () => {
-        log("ICE state: " + peerConnection.iceConnectionState);
-      };
-
-      peerConnection.onconnectionstatechange = () => {
-        log("Connection state: " + peerConnection.connectionState);
-      };
-      
-      peerConnection.ondatachannel = (event) => {
-        dataChannel = event.channel;
-        dataChannel.binaryType = 'arraybuffer';
-        
-        dataChannel.onopen = () => {
-          log('✓ Data channel opened! Receiving data...');
-          document.getElementById('status').textContent = 'Receiving Data';
-          document.getElementById('status').className = 'status connected';
-        };
-        
-        dataChannel.onmessage = (event) => {
-          const data = event.data;
-          
-          if (expectingHeader) {
-            const header = new Uint32Array(data);
-            const frameNum = header[0];
-            const chunkIndex = header[1];
-            const totalChunks = header[2];
-            
-            if (currentFrame !== frameNum) {
-              if (receivedChunks.length > 0) {
-                reassembleFrame();
-              }
-              currentFrame = frameNum;
-              receivedChunks = [];
-              expectedChunks = totalChunks;
-            }
-            
-            expectingHeader = false;
-          } else {
-            receivedChunks.push(new Uint8Array(data));
-            
-            if (receivedChunks.length === expectedChunks) {
-              reassembleFrame();
-            }
-            
-            expectingHeader = true;
-          }
-        };
-        
-        dataChannel.onclose = () => {
-          log('Data channel closed');
-          document.getElementById('status').textContent = 'Connection closed';
-          document.getElementById('status').className = 'status waiting';
-        };
-      };
-      
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          signalingWs.send(JSON.stringify({
-            type: 'ice-candidate',
-            target: senderId,
-            payload: event.candidate
-          }));
-        }
-      };
-      
-      await peerConnection.setRemoteDescription(offer);
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      
-      signalingWs.send(JSON.stringify({
-        type: 'answer',
-        target: senderId,
-        payload: answer
-      }));
-      
-      log('Answer sent to sender');
-    }
-
-    function reassembleFrame() {
-      const totalSize = receivedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-      const completeData = new Uint8Array(totalSize);
-      let offset = 0;
-      for (const chunk of receivedChunks) {
-        completeData.set(chunk, offset);
-        offset += chunk.length;
+  ws.onmessage = event => {
+    if (typeof event.data === "string") {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "paired") {
+        log("✓ Paired with sender");
+        document.getElementById('status').textContent = '✓ Paired - Receiving frames';
+        document.getElementById('status').className = 'status connected';
       }
-      
-      log(`Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
-      processEarthData(completeData.buffer, currentFrame);
-      receivedChunks = [];
+      return;
     }
 
-    function processEarthData(arrayBuffer, frameNum) {
-      // YOUR GAME CODE HERE
-      const uint8View = new Uint8Array(arrayBuffer);
-      
-      // Example: Update your game world with this data
-      // updateGameWorld(uint8View);
-      // renderFrame(uint8View);
-      
-      // Save first frame to verify it works
-      if (frameNum === 1) {
-        downloadAsFile(arrayBuffer, 'received_earthdata.bin');
-        log('First frame saved as received_earthdata.bin');
-      }
-    }
+    handleBinary(event.data);
+  };
 
-    function downloadAsFile(arrayBuffer, filename) {
-      const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+  ws.onclose = () => {
+    log('Disconnected, reconnecting in 3s...');
+    setTimeout(connect, 3000);
+  };
+}
+
+function handleBinary(data) {
+  if (expectingHeader) {
+    const h = new Uint32Array(data);
+    currentFrame = h[0];
+    expectedChunks = h[2];
+    receivedChunks = [];
+    expectingHeader = false;
+  } else {
+    receivedChunks.push(new Uint8Array(data));
+    if (receivedChunks.length === expectedChunks) {
+      reassembleFrame();
     }
-  </script>
+    expectingHeader = true;
+  }
+}
+
+function reassembleFrame() {
+  const totalSize = receivedChunks.reduce((sum, c) => sum + c.length, 0);
+  const complete = new Uint8Array(totalSize);
+  let offset = 0;
+  for (const chunk of receivedChunks) {
+    complete.set(chunk, offset);
+    offset += chunk.length;
+  }
+  log(`Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
+
+  if (currentFrame === 1) downloadAsFile(complete.buffer, 'received_earthdata.bin');
+  receivedChunks = [];
+}
+
+function downloadAsFile(buf, filename) {
+  const blob = new Blob([buf], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click(); URL.revokeObjectURL(url);
+}
+</script>
 </body>
 </html>
