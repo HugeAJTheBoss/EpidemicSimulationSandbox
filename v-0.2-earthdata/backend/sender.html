@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>EarthData Sender - Auto Connect (Fixed)</title>
+  <title>EarthData Sender</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -92,13 +92,13 @@
   </style>
 </head>
 <body>
-  <h1>EarthData Sender (Fixed Connectivity)</h1>
+  <h1>EarthData Sender</h1>
   
   <div class="status" id="status">Ready to start</div>
   
   <div class="card">
     <h3>Step 1: Server URL</h3>
-    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com/" placeholder="https://epidemicsimulationsandbox.onrender.com/">
+    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox-7fj1.onrender.com/" placeholder="https://epidemicsimulationsandbox-7fj1.onrender.com/">
     <div class="ice-info">Using multiple TURN servers for better connectivity</div>
   </div>
   
@@ -111,8 +111,8 @@
   
   <div class="card">
     <h3>Controls</h3>
-    <button onclick="startSending()" id="sendBtn" disabled>▶ Start Sending (10fps)</button>
-    <button onclick="stopSending()" id="stopBtn" disabled>⏸ Stop</button>
+    <button onclick="startSending()" id="sendBtn" disabled>Start Sending (10fps)</button>
+    <button onclick="stopSending()" id="stopBtn" disabled>Stop</button>
   </div>
   
   <div id="log"></div>
@@ -276,7 +276,7 @@
       dataChannel.binaryType = "arraybuffer";
       
       dataChannel.onopen = () => {
-        log('✓ Data channel opened!');
+        log('Data channel opened!');
         document.getElementById('status').textContent = '✓ Connected - Ready to send';
         document.getElementById('status').className = 'status connected';
         document.getElementById('sendBtn').disabled = false;
@@ -335,7 +335,7 @@
       log('▶ Starting to send at 10fps...');
       document.getElementById('sendBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
-      document.getElementById('status').textContent = '📡 Broadcasting...';
+      document.getElementById('status').textContent = 'Broadcasting...';
       
       setTimeout(() => {
         sendInterval = setInterval(async () => {
@@ -382,7 +382,7 @@
       if (sendInterval) {
         clearInterval(sendInterval);
         sendInterval = null;
-        log('⏸ Stopped sending');
+        log('Stopped sending');
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('stopBtn').disabled = true;
         document.getElementById('status').textContent = '✓ Connected - Ready to send';
