@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>EarthData Receiver (Auto-Connect)</title>
+  <title>EarthData Receiver (Fixed)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -42,14 +42,14 @@
   </style>
 </head>
 <body>
-  <h1>EarthData Receiver (Auto-Connect)</h1>
+  <h1>EarthData Receiver (Fixed Connectivity)</h1>
   
   <div class="status" id="status">Connecting...</div>
   
   <div class="setup">
     <strong>Server URL:</strong><br>
     <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com/" placeholder="https://epidemicsimulationsandbox.onrender.com/">
-    <p style="font-size: 12px; color: #666;">Auto-connects on page load. Just open this page and wait!</p>
+    <p style="font-size: 12px; color: #666;">Auto-connects on page load with better TURN servers</p>
   </div>
   
   <div id="log"></div>
@@ -74,7 +74,6 @@
       console.log(msg);
     }
 
-    // Auto-connect on page load
     window.onload = () => {
       connect();
     };
@@ -100,7 +99,6 @@
           myId = data.id;
           log(`My ID: ${myId}`);
           
-          // Register as receiver - automatic matching
           signalingWs.send(JSON.stringify({
             type: 'register',
             role: 'receiver'
@@ -117,8 +115,9 @@
           log('Received offer from sender');
           await handleOffer(data.from, data.payload);
         } else if (data.type === 'ice-candidate') {
-          if (peerConnection) {
+          if (peerConnection && data.payload) {
             await peerConnection.addIceCandidate(data.payload);
+            log(`Added ICE candidate: ${data.payload.candidate ? data.payload.candidate.substring(0, 50) + '...' : 'null'}`);
           }
         }
       };
@@ -132,7 +131,6 @@
         log('Disconnected from signaling server');
         document.getElementById('status').textContent = 'Disconnected';
         
-        // Auto-reconnect after 3 seconds
         setTimeout(() => {
           log('Attempting to reconnect...');
           connect();
@@ -144,24 +142,52 @@
       peerConnection = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
           {
-            urls: [
-              'turn:openrelay.metered.ca:80',
-              'turn:openrelay.metered.ca:443',
-              'turns:openrelay.metered.ca:443'
-            ],
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            urls: 'turn:a.relay.metered.ca:80',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          },
+          {
+            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          },
+          {
+            urls: 'turn:a.relay.metered.ca:443',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          },
+          {
+            urls: 'turns:a.relay.metered.ca:443?transport=tcp',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
           }
-        ]
+        ],
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10
       });
 
       peerConnection.oniceconnectionstatechange = () => {
-        log("ICE state: " + peerConnection.iceConnectionState);
+        log(`ICE Connection State: ${peerConnection.iceConnectionState}`);
+        if (peerConnection.iceConnectionState === 'failed') {
+          log('ICE failed - trying to restart...');
+          peerConnection.restartIce();
+        }
       };
 
       peerConnection.onconnectionstatechange = () => {
-        log("Connection state: " + peerConnection.connectionState);
+        log(`Connection State: ${peerConnection.connectionState}`);
+        if (peerConnection.connectionState === 'failed') {
+          log('Connection failed - may need to reconnect');
+          document.getElementById('status').textContent = '❌ Connection failed';
+          document.getElementById('status').className = 'status';
+        }
+      };
+
+      peerConnection.onicegatheringstatechange = () => {
+        log(`ICE Gathering State: ${peerConnection.iceGatheringState}`);
       };
       
       peerConnection.ondatachannel = (event) => {
@@ -218,6 +244,9 @@
             target: senderId,
             payload: event.candidate
           }));
+          log(`Sending ICE candidate: ${event.candidate.type}`);
+        } else {
+          log('All ICE candidates sent');
         }
       };
       
@@ -249,14 +278,8 @@
     }
 
     function processEarthData(arrayBuffer, frameNum) {
-      // YOUR GAME CODE HERE
       const uint8View = new Uint8Array(arrayBuffer);
       
-      // Example: Update your game world with this data
-      // updateGameWorld(uint8View);
-      // renderFrame(uint8View);
-      
-      // Save first frame to verify it works
       if (frameNum === 1) {
         downloadAsFile(arrayBuffer, 'received_earthdata.bin');
         log('First frame saved as received_earthdata.bin');
