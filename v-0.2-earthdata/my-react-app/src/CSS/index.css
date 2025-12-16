@@ -1,12 +1,18 @@
 :root {
-  background-color: #0C1120;
+  --bg-0: #040616;
+  --bg-1: #071022;
+  --accent: #7C5CFF; 
+  --accent-2: #60C7E8; 
+  --muted: #9aa8bd;
+  --card-bg: rgba(12, 17, 32, 0.6);
+  --glass: rgba(10, 12, 20, 0.6);
+  --text: #e6eef8;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  color: white;
 }
 
 body {
-  background-color: #0C1120;
-  color: white;
+  background: linear-gradient(180deg, var(--bg-0), var(--bg-1));
+  color: var(--text);
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   margin: 0;
 }
@@ -21,15 +27,22 @@ body {
 
 h1 {
     text-align: center;
-    color: #7C5CFF;
+    color: var(--accent);
+    font-family: var(--font-heading);
+    font-weight: 700;
     font-size: 2.5rem;
     margin-top: 20px;
+    text-shadow: 0 6px 18px rgba(124,92,255,0.08);
+    letter-spacing: -0.6px;
 }
 h2 {
     text-align: center;
-    color: #7C5CFF;
+    color: var(--accent);
+    font-family: var(--font-heading);
+    font-weight: 600;
     font-size: 1rem;
     margin-top: 20px;
+    letter-spacing: -0.2px;
 }
 
 .population-sim-btn {
@@ -41,10 +54,10 @@ h2 {
   border: none;
   border-radius: 16px;
   cursor: pointer;
-  background: linear-gradient(90deg, #7c3aed, #4338ca, #2563eb);
+  background: linear-gradient(90deg, var(--accent), #4f46e5, var(--accent-2));
   background-size: 200%;
   transition: all 0.3s ease;
-  box-shadow: 0 0 15px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 8px 30px rgba(92, 73, 255, 0.25), inset 0 1px 0 rgba(255,255,255,0.03);
   margin-bottom: 20px;
 }
 
@@ -80,19 +93,22 @@ h2 {
 
 .controls-panel {
   padding: 14px;
-  color: #e6eef8;
+  color: var(--text);
   font-size: 12px;
-  background: rgba(12, 17, 32, 0.6);
+  background: linear-gradient(180deg, rgba(10,12,20,0.6), rgba(12,17,32,0.56));
   border-radius: 16px;
-  border: 1px solid rgba(124, 92, 255, 0.2);
-  box-shadow: 0 0 20px rgba(79, 70, 229, 0.15);
+  border: 1px solid rgba(124, 92, 255, 0.16);
+  box-shadow: 0 10px 30px rgba(7, 12, 24, 0.5);
 }
 
 .controls-title {
   margin: 0 0 10px 0;
   font-size: 14px;
-  color: #7c5cff;
+  color: var(--accent);
   text-align: center;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.2px;
 }
 
 .control-group {
@@ -110,7 +126,7 @@ h2 {
   appearance: none;
   height: 6px;
   border-radius: 6px;
-  background: linear-gradient(90deg, #4338ca, #2563eb);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
   outline: none;
 }
 
@@ -119,16 +135,17 @@ h2 {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #a78bfa;
+  background: var(--accent-2);
   cursor: pointer;
-  box-shadow: 0 0 10px rgba(167, 139, 250, 0.8);
+  box-shadow: 0 0 12px rgba(96,199,232,0.18), 0 2px 6px rgba(6,10,20,0.45);
+  border: 2px solid rgba(255,255,255,0.06);
 }
 
 .control-slider::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #a78bfa;
+  background: var(--accent-2);
   cursor: pointer;
 }
 
@@ -146,7 +163,7 @@ h2 {
   cursor: pointer;
   font-weight: 600;
   color: white;
-  background: linear-gradient(90deg, #7c3aed, #4338ca);
+  background: linear-gradient(90deg, var(--accent), #5b3be7);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -216,7 +233,7 @@ h2 {
 }
 
 .panel-toggle {
-  background: linear-gradient(90deg,#7c3aed,#4338ca);
+  background: linear-gradient(90deg, var(--accent), #4f46e5);
   color: white;
   border: none;
   padding: 8px 6px;
@@ -278,7 +295,7 @@ h2 {
 .live-sim-canvas-wrapper {
   flex: 1 1 auto;
   min-width: 0; 
-  background: linear-gradient(180deg, #071022, #081028);
+  background: linear-gradient(180deg, var(--bg-1), rgba(6,10,18,0.8));
   border-radius: 12px;
   padding: 18px;
   display: flex;
@@ -339,7 +356,7 @@ h2 {
 
 .header-sub {
   text-align: center;
-  color: #9fbff0;
+  color: var(--muted);
   margin-top: -6px;
   margin-bottom: 10px;
   font-size: 13px;
@@ -356,11 +373,11 @@ h2 {
 .virus-icon-container { display:flex; justify-content:center; align-items:center; padding:8px; }
 
 .virus-pulse {
-  animation: softPulse 1200ms ease-in-out infinite;
+  animation: softPulse 1500ms ease-in-out infinite;
 }
 @keyframes softPulse {
   0% { transform: scale(1); opacity: 0.98; }
-  50% { transform: scale(1.1); opacity: 1; }
+  50% { transform: scale(1.03); opacity: 1; }
   100% { transform: scale(1); opacity: 0.98; }
 }
 

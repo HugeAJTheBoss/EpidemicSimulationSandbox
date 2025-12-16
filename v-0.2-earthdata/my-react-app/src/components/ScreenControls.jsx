@@ -70,7 +70,7 @@ export default function ScreenControls({
           className="control-slider"
           type="range"
           min={0.01}
-          max={0.5}
+          max={0.4}
           step={0.01}
           value={values.minRadius}
           onChange={(e) =>
@@ -86,7 +86,7 @@ export default function ScreenControls({
         <input
           className="control-slider"
           type="range"
-          min={0.2}
+          min={0.5}
           max={3}
           step={0.05}
           value={values.maxRadius}
