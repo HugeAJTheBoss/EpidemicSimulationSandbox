@@ -25,14 +25,13 @@ export default function LiveSim() {
 
   const [controls, setControls] = useState({
     drawStep: 2,
-    globalMultiplier: 0.9,
+    globalMultiplier: 1.0,
     compressExp: 0.7,
     percentileCap: 0.95,
     minRadius: 0.1,
     maxRadius: 0.9,
   });
 
-  // which panel is open: 'virus' | 'screen' | null — only one at a time
   const [openPanel, setOpenPanel] = useState(null);
 
   const togglePanel = (panel) => {
@@ -295,10 +294,44 @@ export default function LiveSim() {
     }
   };
 
-  const resetView = () => {
+  const resetView_Controls = () => {
     zoomRef.current = 1;
     offsetRef.current = { x: 0, y: 0 };
+
+    const def = {
+      drawStep: 2,
+      globalMultiplier: 1.0,
+      compressExp: 0.7,
+      percentileCap: 0.95,
+      minRadius: 0.1,
+      maxRadius: 0.9,
+    };
+
+    setControls(def);
+    drawStepRef.current = def.drawStep;
+    globalMultRef.current = def.globalMultiplier;
+    compressExpRef.current = def.compressExp;
+    percentileCapRef.current = def.percentileCap;
+    minRadiusRef.current = def.minRadius;
+    maxRadiusRef.current = def.maxRadius;
+
+    if (popResRef.current) {
+      const arr = Array.from(popResRef.current).sort((a, b) => a - b);
+      const capIndex = Math.floor(arr.length * def.percentileCap);
+      let cap = arr[capIndex] || 1;
+      if (!isFinite(cap) || cap <= 0) cap = 1;
+      maxPopRef.current = cap;
+    }
+
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
   };
+
+  const resetVirusControls = () =>{
+    
+  }
 
   return (
     <div className="live-sim-container">
@@ -344,7 +377,8 @@ export default function LiveSim() {
                 onChange={handleControlChange}
                 onStart={start}
                 onPause={pause}
-                onReset={resetView}
+                onScreenReset={resetView_Controls}
+                onVirusReset={resetVirusControls}
               />
             </div>
           )}
