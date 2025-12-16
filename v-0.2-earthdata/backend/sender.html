@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>EarthData Sender - Auto Connect (Fixed)</title>
   <style>
@@ -10,9 +11,11 @@
       padding: 20px;
       background: #f5f5f5;
     }
+
     h1 {
       color: #333;
     }
+
     .status {
       padding: 20px;
       margin: 20px 0;
@@ -22,23 +25,27 @@
       text-align: center;
       border: 2px solid #ddd;
     }
-    .connected { 
-      background: #d4edda; 
+
+    .connected {
+      background: #d4edda;
       border-color: #28a745;
       color: #155724;
     }
-    .waiting { 
-      background: #fff3cd; 
+
+    .waiting {
+      background: #fff3cd;
       border-color: #ffc107;
       color: #856404;
     }
+
     .card {
       background: white;
       padding: 20px;
       margin: 15px 0;
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
+
     button {
       padding: 12px 24px;
       font-size: 16px;
@@ -49,13 +56,16 @@
       background: #007bff;
       color: white;
     }
+
     button:hover {
       background: #0056b3;
     }
+
     button:disabled {
       background: #ccc;
       cursor: not-allowed;
     }
+
     input[type="text"] {
       padding: 10px;
       width: 100%;
@@ -64,9 +74,11 @@
       border-radius: 5px;
       box-sizing: border-box;
     }
+
     input[type="file"] {
       margin: 10px 0;
     }
+
     #log {
       background: #000;
       color: #0f0;
@@ -78,12 +90,14 @@
       border-radius: 5px;
       font-size: 13px;
     }
+
     .file-info {
       margin: 10px 0;
       padding: 10px;
       background: #e7f3ff;
       border-radius: 5px;
     }
+
     .ice-info {
       font-size: 11px;
       color: #666;
@@ -91,30 +105,32 @@
     }
   </style>
 </head>
+
 <body>
   <h1>EarthData Sender (Fixed Connectivity)</h1>
-  
+
   <div class="status" id="status">Ready to start</div>
-  
+
   <div class="card">
     <h3>Step 1: Server URL</h3>
-    <input type="text" id="serverUrl" value="wss://epidemicsimulationsandbox-7fj1.onrender.com/" placeholder="wss://epidemicsimulationsandbox-7fj1.onrender.com/">
+    <input type="text" id="serverUrl" value="wss://epidemicsimulationsandbox-7fj1.onrender.com/"
+      placeholder="wss://epidemicsimulationsandbox-7fj1.onrender.com/">
     <div class="ice-info">Using TURN relay for cross-network connectivity</div>
   </div>
-  
+
   <div class="card">
     <h3>Step 2: Load earthdata.bin</h3>
     <input type="file" id="fileInput" accept=".bin">
     <div class="file-info" id="fileInfo" style="display:none;"></div>
     <button onclick="startAutoConnect()" id="connectBtn" disabled>Start Broadcasting</button>
   </div>
-  
+
   <div class="card">
     <h3>Controls</h3>
     <button onclick="startSending()" id="sendBtn" disabled>▶ Start Sending (10fps)</button>
     <button onclick="stopSending()" id="stopBtn" disabled>⏸ Stop</button>
   </div>
-  
+
   <div id="log"></div>
 
   <script>
@@ -126,7 +142,7 @@
     let fileData = null;
     let sendInterval = null;
     let frameCount = 0;
-    
+
     const CHUNK_SIZE = 16384;
 
     function log(msg) {
@@ -140,7 +156,7 @@
     document.getElementById('fileInput').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      
+
       const reader = new FileReader();
       reader.onload = (event) => {
         fileData = event.target.result;
@@ -158,28 +174,28 @@
         alert('Please load earthdata.bin first!');
         return;
       }
-      
+
       const serverUrl = document.getElementById('serverUrl').value;
-      
+
       document.getElementById('connectBtn').disabled = true;
       log('Connecting to signaling server...');
       document.getElementById('status').textContent = 'Connecting...';
-      
+
       signalingWs = new WebSocket(serverUrl);
-      
+
       signalingWs.onopen = () => {
         log('✓ Connected to signaling server');
         document.getElementById('status').textContent = 'Looking for receiver...';
         document.getElementById('status').className = 'status waiting';
       };
-      
+
       signalingWs.onmessage = async (event) => {
         const data = JSON.parse(event.data);
-        
+
         if (data.type === 'id') {
           myId = data.id;
           log(`My ID: ${myId}`);
-          
+
           signalingWs.send(JSON.stringify({
             type: 'register',
             role: 'sender'
@@ -203,13 +219,13 @@
           }
         }
       };
-      
+
       signalingWs.onerror = (err) => {
         log('❌ Signaling error - check server URL');
         document.getElementById('connectBtn').disabled = false;
         document.getElementById('status').textContent = '❌ Connection error';
       };
-      
+
       signalingWs.onclose = () => {
         log('Disconnected from signaling server');
         document.getElementById('connectBtn').disabled = false;
@@ -261,20 +277,20 @@
       peerConnection.onicegatheringstatechange = () => {
         log(`ICE Gathering State: ${peerConnection.iceGatheringState}`);
       };
-      
+
       dataChannel = peerConnection.createDataChannel("earthdata", {
         ordered: true
       });
 
       dataChannel.binaryType = "arraybuffer";
-      
+
       dataChannel.onopen = () => {
         log('✓✓✓ Data channel opened! Ready to send!');
         document.getElementById('status').textContent = '✓ Connected - Ready to send';
         document.getElementById('status').className = 'status connected';
         document.getElementById('sendBtn').disabled = false;
       };
-      
+
       dataChannel.onclose = () => {
         log('Data channel closed');
         stopSending();
@@ -282,12 +298,12 @@
         document.getElementById('status').textContent = 'Disconnected';
         document.getElementById('status').className = 'status';
       };
-      
+
       dataChannel.onerror = (err) => {
         log('Data channel error: ' + err);
         stopSending();
       };
-      
+
       peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
           signalingWs.send(JSON.stringify({
@@ -300,20 +316,20 @@
           log('✓ All ICE candidates sent');
         }
       };
-      
+
       const offer = await peerConnection.createOffer({
         offerToReceiveAudio: false,
         offerToReceiveVideo: false
       });
-      
+
       await peerConnection.setLocalDescription(offer);
-      
+
       signalingWs.send(JSON.stringify({
         type: 'offer',
         target: peerId,
         payload: offer
       }));
-      
+
       log('Offer sent to receiver');
     }
 
@@ -322,39 +338,52 @@
         alert('Data channel not ready!');
         return;
       }
-      
+
       frameCount = 0;
       log('▶ Starting to send at 10fps...');
       document.getElementById('sendBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
       document.getElementById('status').textContent = '📡 Broadcasting...';
-      
-      setTimeout(() => {
-        sendInterval = setInterval(async () => {
-          if (dataChannel.readyState !== 'open') {
-            log('Channel closed, stopping...');
-            stopSending();
-            return;
-          }
-          
-          frameCount++;
-          await sendFrameInChunks(frameCount);
-        }, 100);
-      }, 500);
+
+      async function sendNextFrame() {
+        if (!sendInterval) return; // Stopped
+
+        if (dataChannel.readyState !== 'open') {
+          log('Channel closed, stopping...');
+          stopSending();
+          return;
+        }
+
+        frameCount++;
+        const startTime = Date.now();
+
+        await sendFrameInChunks(frameCount);
+
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, 100 - elapsed); // Target 10fps (100ms)
+
+        setTimeout(sendNextFrame, delay);
+      }
+
+      // Start sending after brief delay
+      setTimeout(sendNextFrame, 500);
+      sendInterval = true; // Use as flag
     }
 
     async function sendFrameInChunks(frameNum) {
+      const startTime = Date.now(); // ADD THIS
+
       const totalChunks = Math.ceil(fileData.byteLength / CHUNK_SIZE);
       let chunksSent = 0;
       const MAX_BUFFER = 1024 * 1024;
-      
+
       for (let offset = 0; offset < fileData.byteLength; offset += CHUNK_SIZE) {
         while (dataChannel.bufferedAmount > MAX_BUFFER) {
           await new Promise(resolve => setTimeout(resolve, 10));
         }
-        
+
         const chunk = fileData.slice(offset, Math.min(offset + CHUNK_SIZE, fileData.byteLength));
-        
+
         try {
           const header = new Uint32Array([frameNum, chunksSent, totalChunks]);
           dataChannel.send(header.buffer);
@@ -366,15 +395,15 @@
           return;
         }
       }
-      
-      log(`Frame ${frameNum} sent (${totalChunks} chunks)`);
+
+      const elapsed = Date.now() - startTime; // ADD THIS
+      log(`Frame ${frameNum} sent (${totalChunks} chunks) in ${elapsed}ms`); // CHANGED
     }
 
     function stopSending() {
       if (sendInterval) {
-        clearInterval(sendInterval);
-        sendInterval = null;
-        log('⏸ Stopped sending');
+        sendInterval = null; // Clear flag
+        log('Stopped sending');
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('stopBtn').disabled = true;
         document.getElementById('status').textContent = '✓ Connected - Ready to send';
@@ -382,4 +411,5 @@
     }
   </script>
 </body>
+
 </html>
