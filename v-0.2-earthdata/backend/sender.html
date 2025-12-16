@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>EarthData Sender - Auto Connect</title>
+  <title>EarthData Sender - Auto Connect (Fixed)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -84,16 +84,22 @@
       background: #e7f3ff;
       border-radius: 5px;
     }
+    .ice-info {
+      font-size: 11px;
+      color: #666;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-  <h1>EarthData Sender (Auto-Connect)</h1>
+  <h1>EarthData Sender (Fixed Connectivity)</h1>
   
   <div class="status" id="status">Ready to start</div>
   
   <div class="card">
     <h3>Step 1: Server URL</h3>
     <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com/" placeholder="https://epidemicsimulationsandbox.onrender.com/">
+    <div class="ice-info">Using multiple TURN servers for better connectivity</div>
   </div>
   
   <div class="card">
@@ -174,7 +180,6 @@
           myId = data.id;
           log(`My ID: ${myId}`);
           
-          // Register as sender - automatic matching
           signalingWs.send(JSON.stringify({
             type: 'register',
             role: 'sender'
@@ -192,7 +197,10 @@
           await peerConnection.setRemoteDescription(data.payload);
           log('Received answer from receiver');
         } else if (data.type === 'ice-candidate') {
-          await peerConnection.addIceCandidate(data.payload);
+          if (data.payload) {
+            await peerConnection.addIceCandidate(data.payload);
+            log(`Added ICE candidate: ${data.payload.candidate ? data.payload.candidate.substring(0, 50) + '...' : 'null'}`);
+          }
         }
       };
       
@@ -209,27 +217,56 @@
     }
 
     async function createConnection() {
+      // Multiple reliable TURN servers for better connectivity
       peerConnection = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
           {
-            urls: [
-              'turn:openrelay.metered.ca:80',
-              'turn:openrelay.metered.ca:443',
-              'turns:openrelay.metered.ca:443'
-            ],
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            urls: 'turn:a.relay.metered.ca:80',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          },
+          {
+            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          },
+          {
+            urls: 'turn:a.relay.metered.ca:443',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          },
+          {
+            urls: 'turns:a.relay.metered.ca:443?transport=tcp',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
           }
-        ]
+        ],
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10
       });
 
       peerConnection.oniceconnectionstatechange = () => {
-        log("ICE state: " + peerConnection.iceConnectionState);
+        log(`ICE Connection State: ${peerConnection.iceConnectionState}`);
+        if (peerConnection.iceConnectionState === 'failed') {
+          log('ICE failed - trying to restart...');
+          peerConnection.restartIce();
+        }
       };
 
       peerConnection.onconnectionstatechange = () => {
-        log("Connection state: " + peerConnection.connectionState);
+        log(`Connection State: ${peerConnection.connectionState}`);
+        if (peerConnection.connectionState === 'failed') {
+          log('Connection failed - may need to reconnect');
+          document.getElementById('status').textContent = '❌ Connection failed';
+          document.getElementById('status').className = 'status';
+        }
+      };
+
+      peerConnection.onicegatheringstatechange = () => {
+        log(`ICE Gathering State: ${peerConnection.iceGatheringState}`);
       };
       
       dataChannel = peerConnection.createDataChannel("earthdata", {
@@ -237,16 +274,6 @@
       });
 
       dataChannel.binaryType = "arraybuffer";
-
-      dataChannel.onopen = () => {
-        log("Data channel opened");
-      };
-
-      dataChannel.onclose = () => {
-        log("Data channel closed");
-      };
-      
-      dataChannel.binaryType = 'arraybuffer';
       
       dataChannel.onopen = () => {
         log('✓ Data channel opened!');
@@ -264,7 +291,7 @@
       };
       
       dataChannel.onerror = (err) => {
-        log('Data channel error');
+        log('Data channel error: ' + err);
         stopSending();
       };
       
@@ -275,10 +302,18 @@
             target: peerId,
             payload: event.candidate
           }));
+          log(`Sending ICE candidate: ${event.candidate.type}`);
+        } else {
+          log('All ICE candidates sent');
         }
       };
       
-      const offer = await peerConnection.createOffer();
+      // Create offer with better settings
+      const offer = await peerConnection.createOffer({
+        offerToReceiveAudio: false,
+        offerToReceiveVideo: false
+      });
+      
       await peerConnection.setLocalDescription(offer);
       
       signalingWs.send(JSON.stringify({
