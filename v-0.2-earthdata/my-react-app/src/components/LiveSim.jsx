@@ -13,12 +13,24 @@ export default function LiveSim() {
 
   const startedRef = useRef(false);
   const rafIdRef = useRef(null);
-  const pollIntervalRef = useRef(null);
-  const pollInFlightRef = useRef(null);
   const listenersAddedRef = useRef(false);
+
+  // WebRTC refs
+  const signalingWsRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const dataChannelRef = useRef(null);
+  const myIdRef = useRef(null);
+  const peerIdRef = useRef(null);
+  
+  // Frame reassembly state
+  const currentFrameRef = useRef(null);
+  const receivedChunksRef = useRef([]);
+  const expectedChunksRef = useRef(0);
+  const expectingHeaderRef = useRef(true);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('Connecting...');
 
   const BASE_W = 1440;
   const BASE_H = 720;
@@ -57,16 +69,21 @@ export default function LiveSim() {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
-      if (pollIntervalRef.current != null) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+      
+      // Clean up WebRTC
+      if (dataChannelRef.current) {
+        dataChannelRef.current.close();
+        dataChannelRef.current = null;
       }
-      if (pollInFlightRef.current) {
-        try {
-          pollInFlightRef.current.abort();
-        } catch {}
-        pollInFlightRef.current = null;
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
       }
+      if (signalingWsRef.current) {
+        signalingWsRef.current.close();
+        signalingWsRef.current = null;
+      }
+      
       const canvas = canvasRef.current;
       if (canvas && listenersAddedRef.current) {
         canvas.removeEventListener("wheel", onWheel);
@@ -116,34 +133,187 @@ export default function LiveSim() {
       }
     };
 
-    const pollOnce = async () => {
-      if (pollInFlightRef.current) {
-        try {
-          pollInFlightRef.current.abort();
-        } catch {}
-        pollInFlightRef.current = null;
+    const reassembleFrame = () => {
+      const totalSize = receivedChunksRef.current.reduce((sum, chunk) => sum + chunk.length, 0);
+      const completeData = new Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of receivedChunksRef.current) {
+        completeData.set(chunk, offset);
+        offset += chunk.length;
       }
-      const ac = new AbortController();
-      pollInFlightRef.current = ac;
-
-      try {
-        const resp = await fetch("/sim_frame.bin?cb=" + Date.now(), {
-          signal: ac.signal,
-        });
-        if (!resp.ok) return;
-
-        const buf = await resp.arrayBuffer();
-        const u8 = new Uint8Array(buf);
-        if (u8.length === BASE_W * BASE_H * 3) {
-          simBufRef.current = u8;
-        }
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          console.warn("poll error", err);
-        }
-      } finally {
-        pollInFlightRef.current = null;
+      
+      // Update simBufRef with the complete frame
+      if (completeData.length === BASE_W * BASE_H * 3) {
+        simBufRef.current = completeData;
       }
+      
+      receivedChunksRef.current = [];
+    };
+
+    const handleOffer = async (senderId, offer) => {
+      peerConnectionRef.current = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          {
+            urls: 'turn:a.relay.metered.ca:80',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          },
+          {
+            urls: 'turn:a.relay.metered.ca:443',
+            username: 'e15c82c8b0e19f31acf2ae9a',
+            credential: 'Bwp0MQdJDGMl1Yct',
+          }
+        ],
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10
+      });
+
+      peerConnectionRef.current.oniceconnectionstatechange = () => {
+        console.log('ICE State:', peerConnectionRef.current.iceConnectionState);
+        if (peerConnectionRef.current.iceConnectionState === 'connected') {
+          setConnectionStatus('Connected');
+        } else if (peerConnectionRef.current.iceConnectionState === 'failed') {
+          setConnectionStatus('Connection failed');
+          peerConnectionRef.current.restartIce();
+        }
+      };
+
+      peerConnectionRef.current.onconnectionstatechange = () => {
+        console.log('Connection State:', peerConnectionRef.current.connectionState);
+        if (peerConnectionRef.current.connectionState === 'failed') {
+          setConnectionStatus('Connection failed');
+        }
+      };
+      
+      peerConnectionRef.current.ondatachannel = (event) => {
+        dataChannelRef.current = event.channel;
+        dataChannelRef.current.binaryType = 'arraybuffer';
+        
+        dataChannelRef.current.onopen = () => {
+          console.log('Data channel opened - receiving frames');
+          setConnectionStatus('Receiving data');
+        };
+        
+        dataChannelRef.current.onmessage = (event) => {
+          const data = event.data;
+          
+          if (expectingHeaderRef.current) {
+            const header = new Uint32Array(data);
+            const frameNum = header[0];
+            const chunkIndex = header[1];
+            const totalChunks = header[2];
+            
+            if (currentFrameRef.current !== frameNum) {
+              if (receivedChunksRef.current.length > 0) {
+                reassembleFrame();
+              }
+              currentFrameRef.current = frameNum;
+              receivedChunksRef.current = [];
+              expectedChunksRef.current = totalChunks;
+            }
+            
+            expectingHeaderRef.current = false;
+          } else {
+            receivedChunksRef.current.push(new Uint8Array(data));
+            
+            if (receivedChunksRef.current.length === expectedChunksRef.current) {
+              reassembleFrame();
+            }
+            
+            expectingHeaderRef.current = true;
+          }
+        };
+        
+        dataChannelRef.current.onclose = () => {
+          console.log('Data channel closed');
+          setConnectionStatus('Connection closed');
+        };
+      };
+      
+      peerConnectionRef.current.onicecandidate = (event) => {
+        if (event.candidate && signalingWsRef.current) {
+          signalingWsRef.current.send(JSON.stringify({
+            type: 'ice-candidate',
+            target: senderId,
+            payload: event.candidate
+          }));
+        }
+      };
+      
+      await peerConnectionRef.current.setRemoteDescription(offer);
+      const answer = await peerConnectionRef.current.createAnswer();
+      await peerConnectionRef.current.setLocalDescription(answer);
+      
+      if (signalingWsRef.current) {
+        signalingWsRef.current.send(JSON.stringify({
+          type: 'answer',
+          target: senderId,
+          payload: answer
+        }));
+      }
+    };
+
+    const connectWebRTC = () => {
+      const serverUrl = 'wss://epidemicsimulationsandbox-7fj1.onrender.com/';
+      
+      console.log('Connecting to signaling server...');
+      setConnectionStatus('Connecting...');
+      
+      signalingWsRef.current = new WebSocket(serverUrl);
+      
+      signalingWsRef.current.onopen = () => {
+        console.log('Connected to signaling server');
+        setConnectionStatus('Waiting for sender...');
+      };
+      
+      signalingWsRef.current.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'id') {
+          myIdRef.current = data.id;
+          console.log('My ID:', myIdRef.current);
+          
+          signalingWsRef.current.send(JSON.stringify({
+            type: 'register',
+            role: 'receiver'
+          }));
+          console.log('Registered as receiver');
+        } else if (data.type === 'waiting') {
+          console.log('Waiting for sender...');
+          setConnectionStatus('Waiting for sender...');
+        } else if (data.type === 'paired') {
+          peerIdRef.current = data.peerId;
+          console.log('Paired with sender:', peerIdRef.current);
+          setConnectionStatus('Paired - establishing connection...');
+        } else if (data.type === 'offer') {
+          console.log('Received offer from sender');
+          await handleOffer(data.from, data.payload);
+        } else if (data.type === 'ice-candidate') {
+          if (peerConnectionRef.current && data.payload) {
+            await peerConnectionRef.current.addIceCandidate(data.payload);
+          }
+        }
+      };
+      
+      signalingWsRef.current.onerror = (err) => {
+        console.error('Signaling error:', err);
+        setConnectionStatus('Connection error');
+      };
+      
+      signalingWsRef.current.onclose = () => {
+        console.log('Disconnected from signaling server');
+        setConnectionStatus('Disconnected - reconnecting...');
+        
+        setTimeout(() => {
+          if (mounted) {
+            console.log('Attempting to reconnect...');
+            connectWebRTC();
+          }
+        }, 3000);
+      };
     };
 
     const startDrawLoop = () => {
@@ -232,10 +402,7 @@ export default function LiveSim() {
       if (!mounted) return;
 
       startDrawLoop();
-      await pollOnce();
-      pollIntervalRef.current = setInterval(() => {
-        if (!pollInFlightRef.current) pollOnce();
-      }, 250);
+      connectWebRTC(); // Start WebRTC connection
 
       const canvas = canvasRef.current;
       if (!listenersAddedRef.current) {
@@ -307,6 +474,9 @@ export default function LiveSim() {
           <p className="live-sim-loading">Loading population data…</p>
         )}
         {error && <p className="live-sim-error">Error: {error}</p>}
+        <p className="live-sim-connection-status">
+          WebRTC Status: {connectionStatus}
+        </p>
       </div>
 
       <div className="live-sim-row">
