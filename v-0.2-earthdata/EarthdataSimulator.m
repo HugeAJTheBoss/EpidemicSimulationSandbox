@@ -275,9 +275,8 @@ function runTick()
         sz = size(rgbData);
         scriptDir = fileparts(mfilename('fullpath'));
         
-        binFile = fullfile(scriptDir, 'backend', 'earthdata_rgb.bin');
+        binFile = fullfile(scriptDir, 'backend', 'sim_frame.bin'); // TODO: CHANGE BACK TO EARTHDATA
         fid = fopen(binFile, 'w');
-        fwrite(fid, [sz(1), sz(2)], 'uint32');  % dimensions header
         fwrite(fid, permute(rgbData, [3 1 2]), 'uint8');  % RGB interleaved
         fclose(fid);
     end
