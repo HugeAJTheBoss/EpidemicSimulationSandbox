@@ -5,7 +5,7 @@ export default function ScreenControls({
   onChange,
   onStart,
   onPause,
-  onReset,
+  onScreenReset,
 }) {
   return (
     <div className="controls-panel">
@@ -103,7 +103,7 @@ export default function ScreenControls({
         <button className="control-btn" onClick={onPause}>
           Pause
         </button>
-        <button className="control-btn" onClick={onReset}>
+        <button className="control-btn" onClick={onScreenReset}>
           Reset
         </button>
       </div>
