@@ -1,5 +1,5 @@
 # EpidemicSimulationSandbox
-Passion Project for Advanced Computer Science at Mass Academy of Math and Science made by Atharv Joshi and Arnav Prabhudesai
+Passion Project for Advanced Computer Science at the Mass Academy of Math and Science made by Atharv Joshi and Arnav Prabhudesai
 
 
 # How to run the frontend
