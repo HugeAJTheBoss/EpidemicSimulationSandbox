@@ -1,12 +1,19 @@
 import React from "react";
 
-export default function ScreenControls({
-  values,
-  onChange,
-  onStart,
-  onPause,
-  onScreenReset,
-}) {
+export default function ScreenControls(props) {
+  const {
+    values,
+    onChange,
+    onStart,
+    onPause,
+    onScreenReset,
+  } = props;
+
+  const num = (v) => Number(v);
+//all of the sliders. we had repetitive structure to make the code more readable
+//The slider values initially are just what we thought looked the best, but the good thing is that the user can change everything to suit their needs
+//controls how the sim looks (dot size, pixelation, etc.)
+//completely finished part of the project! This doesn't need to connect to the backend.
   return (
     <div className="controls-panel">
       <h3 className="controls-title">Visual Controls</h3>
@@ -18,13 +25,11 @@ export default function ScreenControls({
         <input
           className="control-slider"
           type="range"
-          min={0.5}
-          max={8}
-          step={0.1}
+          min="0.5"
+          max="8"
+          step="0.1"
           value={values.drawStep}
-          onChange={(e) =>
-            onChange("drawStep", Number(e.target.value))
-          }
+          onChange={(e) => onChange("drawStep", num(e.target.value))}
         />
       </div>
 
@@ -35,12 +40,12 @@ export default function ScreenControls({
         <input
           className="control-slider"
           type="range"
-          min={0.2}
-          max={2}
-          step={0.01}
+          min="0.2"
+          max="2"
+          step="0.01"
           value={values.globalMultiplier}
           onChange={(e) =>
-            onChange("globalMultiplier", Number(e.target.value))
+            onChange("globalMultiplier", num(e.target.value))
           }
         />
       </div>
@@ -52,13 +57,11 @@ export default function ScreenControls({
         <input
           className="control-slider"
           type="range"
-          min={0.4}
-          max={1.5}
-          step={0.01}
+          min="0.4"
+          max="1.5"
+          step="0.01"
           value={values.compressExp}
-          onChange={(e) =>
-            onChange("compressExp", Number(e.target.value))
-          }
+          onChange={(e) => onChange("compressExp", +e.target.value)}
         />
       </div>
 
@@ -69,9 +72,9 @@ export default function ScreenControls({
         <input
           className="control-slider"
           type="range"
-          min={0.01}
-          max={0.4}
-          step={0.01}
+          min="0.01"
+          max="0.4"
+          step="0.01"
           value={values.minRadius}
           onChange={(e) =>
             onChange("minRadius", Number(e.target.value))
@@ -86,27 +89,26 @@ export default function ScreenControls({
         <input
           className="control-slider"
           type="range"
-          min={0.5}
-          max={3}
-          step={0.05}
+          min="0.5"
+          max="3"
+          step="0.05"
           value={values.maxRadius}
-          onChange={(e) =>
-            onChange("maxRadius", Number(e.target.value))
-          }
+          onChange={(e) => onChange("maxRadius", +e.target.value)}
         />
       </div>
 
       <div className="controls-buttons">
-        <button className="control-btn" onClick={onStart}>
+        <button className="control-btn" onClick={() => onStart && onStart()}>
           Start
         </button>
         <button className="control-btn" onClick={onPause}>
           Pause
         </button>
-        <button className="control-btn" onClick={onScreenReset}>
+        <button className="control-btn" onClick={() => onScreenReset()}>
           Reset
         </button>
       </div>
     </div>
+    // the only button that works is the reset button, but others were added for the future when we add the actual simulation stuff.
   );
 }
