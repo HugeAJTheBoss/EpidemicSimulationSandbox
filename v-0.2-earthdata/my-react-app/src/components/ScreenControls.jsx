@@ -25,9 +25,9 @@ export default function ScreenControls(props) {
         <input
           className="control-slider"
           type="range"
-          min="0.5"
+          min="1"
           max="8"
-          step="0.1"
+          step="1"
           value={values.drawStep}
           onChange={(e) => onChange("drawStep", num(e.target.value))}
         />

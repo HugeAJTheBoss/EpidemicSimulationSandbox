@@ -154,7 +154,7 @@ export default function VirusControls(props) {
       >
         <VirusIcon size={220} {...iconProps} />
       </div>
-  // reset button
+      
       <div className="controls-buttons">
         <button className="control-btn" onClick={resetAll}>
           Reset
