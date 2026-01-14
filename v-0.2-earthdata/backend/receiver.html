@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <title>EarthData Receiver</title>
+  <title>EarthData Receiver (Auto-Connect)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -9,6 +10,7 @@
       margin: 50px auto;
       padding: 20px;
     }
+
     .status {
       padding: 20px;
       margin: 20px 0;
@@ -17,13 +19,23 @@
       font-size: 24px;
       text-align: center;
     }
-    .connected { background: #d4edda; color: #155724; }
-    .waiting { background: #fff3cd; color: #856404; }
+
+    .connected {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .waiting {
+      background: #fff3cd;
+      color: #856404;
+    }
+
     input {
       padding: 10px;
       width: 400px;
       font-size: 14px;
     }
+
     #log {
       background: #000;
       color: #0f0;
@@ -33,6 +45,7 @@
       font-family: monospace;
       margin-top: 20px;
     }
+
     .setup {
       background: #e7f3ff;
       padding: 15px;
@@ -41,32 +54,33 @@
     }
   </style>
 </head>
+
 <body>
-  <h1>EarthData Receiver</h1>
-  
-  <div class="status" id="status">Connecting</div>
-  
+  <h1>EarthData Receiver (Auto-Connect)</h1>
+
+  <div class="status" id="status">Connecting...</div>
+
   <div class="setup">
     <strong>Server URL:</strong><br>
-    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox-7fj1.onrender.com/" placeholder="https://epidemicsimulationsandbox-7fj1.onrender.com/">
-    <p style="font-size: 12px; color: #666;">Auto-connects on page load with better TURN servers</p>
+    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com"
+      placeholder="https://epidemicsimulationsandbox.onrender.com">
+    <p style="font-size: 12px; color: #666;">Auto-connects on page load. Just open this page and wait!</p>
   </div>
-  
+
   <div id="log"></div>
 
   <script>
     let signalingWs = null;
-    let connection = null;
-    let channel = null;
+    let peerConnection = null;
+    let dataChannel = null;
     let myId = null;
     let peerId = null;
-    
-    let frame = null;
+
+    let currentFrame = null;
     let receivedChunks = [];
     let expectedChunks = 0;
     let expectingHeader = true;
 
-    // Format for output logs
     function log(msg) {
       const logDiv = document.getElementById('log');
       const time = new Date().toLocaleTimeString();
@@ -75,32 +89,33 @@
       console.log(msg);
     }
 
+    // Auto-connect on page load
     window.onload = () => {
       connect();
     };
 
-    // Connect to server
     async function connect() {
       const serverUrl = document.getElementById('serverUrl').value;
-      
+
       log('Connecting to signaling server...');
       document.getElementById('status').textContent = 'Connecting...';
-      
+
       signalingWs = new WebSocket(serverUrl);
-      
+
       signalingWs.onopen = () => {
-        log('Connected to signaling server');
+        log('✓ Connected to signaling server');
         document.getElementById('status').textContent = 'Waiting for sender...';
         document.getElementById('status').className = 'status waiting';
       };
-      
+
       signalingWs.onmessage = async (event) => {
         const data = JSON.parse(event.data);
-        
+
         if (data.type === 'id') {
           myId = data.id;
           log(`My ID: ${myId}`);
-          
+
+          // Register as receiver - automatic matching
           signalingWs.send(JSON.stringify({
             type: 'register',
             role: 'receiver'
@@ -108,31 +123,31 @@
           log('Registered as receiver, waiting for sender...');
         } else if (data.type === 'waiting') {
           log('Waiting for a sender to connect...');
-          document.getElementById('status').textContent = 'Waiting for sender...';
+          document.getElementById('status').textContent = '⏳ Waiting for sender...';
         } else if (data.type === 'paired') {
           peerId = data.peerId;
-          log(`Paired with sender: ${peerId}`);
+          log(`✓ Paired with sender: ${peerId}`);
           document.getElementById('status').textContent = 'Paired! Establishing connection...';
         } else if (data.type === 'offer') {
           log('Received offer from sender');
           await handleOffer(data.from, data.payload);
         } else if (data.type === 'ice-candidate') {
-          if (connection && data.payload) {
-            await connection.addIceCandidate(data.payload);
-            log(`Added ICE candidate: ${data.payload.candidate ? data.payload.candidate.substring(0, 50) + '...' : 'null'}`);
+          if (peerConnection) {
+            await peerConnection.addIceCandidate(data.payload);
           }
         }
       };
-      
+
       signalingWs.onerror = (err) => {
         log('Signaling error - check server URL');
-        document.getElementById('status').textContent = 'Connection error';
+        document.getElementById('status').textContent = '❌ Connection error';
       };
-      
+
       signalingWs.onclose = () => {
         log('Disconnected from signaling server');
-        document.getElementById('status').textContent = 'Disconnected';
-        
+        document.getElementById('status').textContent = '❌ Disconnected';
+
+        // Auto-reconnect after 3 seconds
         setTimeout(() => {
           log('Attempting to reconnect...');
           connect();
@@ -140,133 +155,81 @@
       };
     }
 
-    // Connect to incoming sender
     async function handleOffer(senderId, offer) {
-      connection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          {
-            urls: 'turn:a.relay.metered.ca:80',
-            username: 'e15c82c8b0e19f31acf2ae9a',
-            credential: 'Bwp0MQdJDGMl1Yct',
-          },
-          {
-            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
-            username: 'e15c82c8b0e19f31acf2ae9a',
-            credential: 'Bwp0MQdJDGMl1Yct',
-          },
-          {
-            urls: 'turn:a.relay.metered.ca:443',
-            username: 'e15c82c8b0e19f31acf2ae9a',
-            credential: 'Bwp0MQdJDGMl1Yct',
-          },
-          {
-            urls: 'turns:a.relay.metered.ca:443?transport=tcp',
-            username: 'e15c82c8b0e19f31acf2ae9a',
-            credential: 'Bwp0MQdJDGMl1Yct',
-          }
-        ],
-        iceTransportPolicy: 'all',
-        iceCandidatePoolSize: 10
+      peerConnection = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       });
 
-      connection.oniceconnectionstatechange = () => {
-        log(`ICE Connection State: ${connection.iceConnectionState}`);
-        if (connection.iceConnectionState === 'failed') {
-          log('ICE failed - trying to restart...');
-          connection.restartIce();
-        }
-      };
+      peerConnection.ondatachannel = (event) => {
+        dataChannel = event.channel;
+        dataChannel.binaryType = 'arraybuffer';
 
-      connection.onconnectionstatechange = () => {
-        log(`Connection State: ${connection.connectionState}`);
-        if (connection.connectionState === 'failed') {
-          log('Connection failed - may need to reconnect');
-          document.getElementById('status').textContent = '❌ Connection failed';
-          document.getElementById('status').className = 'status';
-        }
-      };
-
-      connection.onicegatheringstatechange = () => {
-        log(`ICE Gathering State: ${connection.iceGatheringState}`);
-      };
-      
-      connection.ondatachannel = (event) => {
-        channel = event.channel;
-        channel.binaryType = 'arraybuffer';
-        
-        channel.onopen = () => {
-          log('Data channel opened! Receiving data...');
-          document.getElementById('status').textContent = 'Receiving Data';
+        dataChannel.onopen = () => {
+          log('✓ Data channel opened! Receiving data...');
+          document.getElementById('status').textContent = '✓ Receiving Data';
           document.getElementById('status').className = 'status connected';
         };
-        
-        channel.onmessage = (event) => {
+
+        dataChannel.onmessage = (event) => {
           const data = event.data;
-          
+
           if (expectingHeader) {
             const header = new Uint32Array(data);
             const frameNum = header[0];
             const chunkIndex = header[1];
             const totalChunks = header[2];
-            
-            if (frame !== frameNum) {
+
+            if (currentFrame !== frameNum) {
               if (receivedChunks.length > 0) {
                 reassembleFrame();
               }
-              frame = frameNum;
+              currentFrame = frameNum;
               receivedChunks = [];
               expectedChunks = totalChunks;
             }
-            
+
             expectingHeader = false;
           } else {
             receivedChunks.push(new Uint8Array(data));
-            
+
             if (receivedChunks.length === expectedChunks) {
               reassembleFrame();
             }
-            
+
             expectingHeader = true;
           }
         };
-        
-        channel.onclose = () => {
+
+        dataChannel.onclose = () => {
           log('Data channel closed');
           document.getElementById('status').textContent = 'Connection closed';
           document.getElementById('status').className = 'status waiting';
         };
       };
-      
-      connection.onicecandidate = (event) => {
+
+      peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
           signalingWs.send(JSON.stringify({
             type: 'ice-candidate',
             target: senderId,
             payload: event.candidate
           }));
-          log(`Sending ICE candidate: ${event.candidate.type}`);
-        } else {
-          log('All ICE candidates sent');
         }
       };
-      
-      await connection.setRemoteDescription(offer);
-      const answer = await connection.createAnswer();
-      await connection.setLocalDescription(answer);
-      
+
+      await peerConnection.setRemoteDescription(offer);
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
       signalingWs.send(JSON.stringify({
         type: 'answer',
         target: senderId,
         payload: answer
       }));
-      
+
       log('Answer sent to sender');
     }
 
-    // Build frame from chunks
     function reassembleFrame() {
       const totalSize = receivedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
       const completeData = new Uint8Array(totalSize);
@@ -275,22 +238,27 @@
         completeData.set(chunk, offset);
         offset += chunk.length;
       }
-      
-      log(`Frame ${frame}: ${totalSize.toLocaleString()} bytes complete`);
-      processEarthData(completeData.buffer, frame);
+
+      log(`Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
+      processEarthData(completeData.buffer, currentFrame);
       receivedChunks = [];
     }
 
     function processEarthData(arrayBuffer, frameNum) {
+      // YOUR GAME CODE HERE
       const uint8View = new Uint8Array(arrayBuffer);
-      
+
+      // Example: Update your game world with this data
+      // updateGameWorld(uint8View);
+      // renderFrame(uint8View);
+
+      // Save first frame to verify it works
       if (frameNum === 1) {
-        downloadAsFile(arrayBuffer, 'sim_frame.bin');
-        log('First frame saved successfully');
+        downloadAsFile(arrayBuffer, 'received_earthdata.bin');
+        log('First frame saved as received_earthdata.bin');
       }
     }
 
-    // Download frame
     function downloadAsFile(arrayBuffer, filename) {
       const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
@@ -302,4 +270,5 @@
     }
   </script>
 </body>
+
 </html>
