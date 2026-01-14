@@ -52,6 +52,14 @@
       border-radius: 5px;
       margin: 20px 0;
     }
+
+    #frameStats {
+      background: #f8f9fa;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      font-family: monospace;
+    }
   </style>
 </head>
 
@@ -59,6 +67,8 @@
   <h1>EarthData Receiver (Auto-Connect)</h1>
 
   <div class="status" id="status">Connecting...</div>
+
+  <div id="frameStats"></div>
 
   <div class="setup">
     <strong>Server URL:</strong><br>
@@ -76,10 +86,12 @@
     let myId = null;
     let peerId = null;
 
+    // Better chunk tracking
     let currentFrame = null;
-    let receivedChunks = [];
+    let frameChunks = new Map(); // chunkIndex -> chunk data
     let expectedChunks = 0;
-    let expectingHeader = true;
+    let messageQueue = [];
+    let processingQueue = false;
 
     function log(msg) {
       const logDiv = document.getElementById('log');
@@ -171,33 +183,9 @@
         };
 
         dataChannel.onmessage = (event) => {
-          const data = event.data;
-
-          if (expectingHeader) {
-            const header = new Uint32Array(data);
-            const frameNum = header[0];
-            const chunkIndex = header[1];
-            const totalChunks = header[2];
-
-            if (currentFrame !== frameNum) {
-              if (receivedChunks.length > 0) {
-                reassembleFrame();
-              }
-              currentFrame = frameNum;
-              receivedChunks = [];
-              expectedChunks = totalChunks;
-            }
-
-            expectingHeader = false;
-          } else {
-            receivedChunks.push(new Uint8Array(data));
-
-            if (receivedChunks.length === expectedChunks) {
-              reassembleFrame();
-            }
-
-            expectingHeader = true;
-          }
+          // Queue messages for processing
+          messageQueue.push(event.data);
+          processMessageQueue();
         };
 
         dataChannel.onclose = () => {
@@ -230,23 +218,106 @@
       log('Answer sent to sender');
     }
 
-    function reassembleFrame() {
-      const totalSize = receivedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-      const completeData = new Uint8Array(totalSize);
-      let offset = 0;
-      for (const chunk of receivedChunks) {
-        completeData.set(chunk, offset);
-        offset += chunk.length;
+    async function processMessageQueue() {
+      if (processingQueue || messageQueue.length === 0) return;
+
+      processingQueue = true;
+
+      while (messageQueue.length > 0) {
+        const data = messageQueue.shift();
+
+        // Determine if this is a header or chunk
+        if (data.byteLength === 12) {
+          // This is a header (3 x Uint32 = 12 bytes)
+          const header = new Uint32Array(data);
+          const frameNum = header[0];
+          const chunkIndex = header[1];
+          const totalChunks = header[2];
+
+          // New frame?
+          if (currentFrame !== frameNum) {
+            // Process previous frame if we had one
+            if (currentFrame !== null && frameChunks.size > 0) {
+              reassembleFrame();
+            }
+
+            // Start new frame
+            currentFrame = frameNum;
+            frameChunks.clear();
+            expectedChunks = totalChunks;
+
+            log(`Starting frame ${frameNum} (expecting ${totalChunks} chunks)`);
+          }
+
+          // Next message should be the chunk data
+          if (messageQueue.length > 0) {
+            const chunkData = messageQueue.shift();
+            frameChunks.set(chunkIndex, new Uint8Array(chunkData));
+
+            // Update stats
+            document.getElementById('frameStats').textContent =
+              `Frame ${currentFrame}: ${frameChunks.size}/${expectedChunks} chunks received`;
+
+            // Got all chunks?
+            if (frameChunks.size === expectedChunks) {
+              reassembleFrame();
+            }
+          }
+        }
       }
 
-      log(`Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
+      processingQueue = false;
+    }
+
+    function reassembleFrame() {
+      if (frameChunks.size !== expectedChunks) {
+        log(`⚠ Frame ${currentFrame} incomplete: ${frameChunks.size}/${expectedChunks} chunks`);
+        // Skip incomplete frames
+        frameChunks.clear();
+        return;
+      }
+
+      // Calculate total size
+      let totalSize = 0;
+      frameChunks.forEach(chunk => {
+        totalSize += chunk.length;
+      });
+
+      // Reassemble in order
+      const completeData = new Uint8Array(totalSize);
+      let offset = 0;
+
+      // Important: iterate in chunk index order
+      for (let i = 0; i < expectedChunks; i++) {
+        const chunk = frameChunks.get(i);
+        if (chunk) {
+          completeData.set(chunk, offset);
+          offset += chunk.length;
+        } else {
+          log(`⚠ Missing chunk ${i} in frame ${currentFrame}`);
+          frameChunks.clear();
+          return;
+        }
+      }
+
+      log(`✓ Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
       processEarthData(completeData.buffer, currentFrame);
-      receivedChunks = [];
+
+      // Clear for next frame
+      frameChunks.clear();
     }
 
     function processEarthData(arrayBuffer, frameNum) {
       // YOUR GAME CODE HERE
       const uint8View = new Uint8Array(arrayBuffer);
+
+      // Verify size
+      const expectedSize = 3110400; // Your file size
+      if (arrayBuffer.byteLength !== expectedSize) {
+        log(`⚠ Size mismatch! Expected ${expectedSize}, got ${arrayBuffer.byteLength}`);
+      } else {
+        log(`✓ Size correct: ${arrayBuffer.byteLength} bytes`);
+      }
 
       // Example: Update your game world with this data
       // updateGameWorld(uint8View);
@@ -255,7 +326,7 @@
       // Save first frame to verify it works
       if (frameNum === 1) {
         downloadAsFile(arrayBuffer, 'received_earthdata.bin');
-        log('First frame saved as received_earthdata.bin');
+        log('✓ First frame saved as received_earthdata.bin');
       }
     }
 
@@ -267,6 +338,7 @@
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+      log(`Downloaded ${filename} (${arrayBuffer.byteLength} bytes)`);
     }
   </script>
 </body>
