@@ -107,8 +107,7 @@
 
   <div class="card">
     <h3>Step 1: Server URL</h3>
-    <input type="text" id="serverUrl" value="https://epidemicsimulationsandbox.onrender.com"
-      placeholder="https://epidemicsimulationsandbox.onrender.com">
+    <input type="text" id="serverUrl" value="wss://your-app.onrender.com" placeholder="wss://your-app.onrender.com">
   </div>
 
   <div class="card">
@@ -120,7 +119,8 @@
 
   <div class="card">
     <h3>Controls</h3>
-    <button onclick="startSending()" id="sendBtn" disabled>▶ Start Sending (10fps)</button>
+    <label>FPS: <input type="number" id="fpsInput" value="2" min="1" max="10" style="width:60px;"></label>
+    <button onclick="startSending()" id="sendBtn" disabled>▶ Start Sending</button>
     <button onclick="stopSending()" id="stopBtn" disabled>⏸ Stop</button>
   </div>
 
@@ -283,11 +283,14 @@
         return;
       }
 
+      const fps = parseInt(document.getElementById('fpsInput').value) || 2;
+      const interval = 1000 / fps;
+
       frameCount = 0;
-      log('▶ Starting to send at 10fps...');
+      log(`▶ Starting to send at ${fps} fps (one frame every ${interval}ms)...`);
       document.getElementById('sendBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
-      document.getElementById('status').textContent = '📡 Broadcasting...';
+      document.getElementById('status').textContent = `📡 Broadcasting at ${fps} fps...`;
 
       setTimeout(() => {
         sendInterval = setInterval(async () => {
@@ -299,18 +302,21 @@
 
           frameCount++;
           await sendFrameInChunks(frameCount);
-        }, 100);
+        }, interval);
       }, 500);
     }
 
     async function sendFrameInChunks(frameNum) {
       const totalChunks = Math.ceil(fileData.byteLength / CHUNK_SIZE);
       let chunksSent = 0;
-      const MAX_BUFFER = 1024 * 1024;
+      const MAX_BUFFER = 8 * 1024 * 1024; // Increase buffer to 8MB
+
+      const startTime = performance.now();
 
       for (let offset = 0; offset < fileData.byteLength; offset += CHUNK_SIZE) {
+        // Wait if buffer is getting full, but with shorter delay
         while (dataChannel.bufferedAmount > MAX_BUFFER) {
-          await new Promise(resolve => setTimeout(resolve, 10));
+          await new Promise(resolve => setTimeout(resolve, 1)); // 1ms instead of 10ms
         }
 
         const chunk = fileData.slice(offset, Math.min(offset + CHUNK_SIZE, fileData.byteLength));
@@ -327,7 +333,8 @@
         }
       }
 
-      log(`Frame ${frameNum} sent (${totalChunks} chunks)`);
+      const elapsed = (performance.now() - startTime).toFixed(0);
+      log(`Frame ${frameNum} sent (${totalChunks} chunks in ${elapsed}ms)`);
     }
 
     function stopSending() {
