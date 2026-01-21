@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { fromUrl } from "geotiff";
 import ScreenControls from "./ScreenControls";
 import VirusControls, { DEFAULTS as VIRUS_DEFAULTS } from "./VirusControls";
+import EarthDataReceiver from "./EarthDataReceiver";
 import "../CSS/index.css";
 
 // LiveSim: main component!
@@ -22,7 +23,7 @@ export default function LiveSim() {
 
   const zoomRef = useRef(1);
   const offsetRef = useRef({ x: 0, y: 0 });
-  
+
   const drawStepRef = useRef(2);
   const globalMultRef = useRef(1);
   const compressExpRef = useRef(0.7);
@@ -39,6 +40,7 @@ export default function LiveSim() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [openPanel, setOpenPanel] = useState(null);
+  const [receiverActive, setReceiverActive] = useState(false);
 
   const [controls, setControls] = useState({
     drawStep: 2,
@@ -174,7 +176,7 @@ export default function LiveSim() {
   }, []);
 
   // Poll the backend for the latest simulation frame (binary interleaved RGB)
-  // We want to change this to pull directly from receiver in the future instead of the sim_frame file, but we don't know if that's possible.
+  // Only poll when receiver is not active - otherwise we get data from WebRTC
   useEffect(() => {
     const poll = async () => {
       if (pollAbortRef.current) pollAbortRef.current.abort();
@@ -190,19 +192,22 @@ export default function LiveSim() {
         const u8 = new Uint8Array(buf);
         // basic validation: expect width * height * 3 bytes
         if (u8.length === BASE_W * BASE_H * 3) simBufRef.current = u8;
-      } catch {}
+      } catch { }
       pollAbortRef.current = null;
     };
 
-    poll();
-    pollIntervalRef.current = setInterval(poll, 250);
+    // Only start polling if receiver is not active
+    if (!receiverActive) {
+      poll();
+      pollIntervalRef.current = setInterval(poll, 250);
+    }
 
     return () => {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
       if (pollAbortRef.current) pollAbortRef.current.abort();
     };
-  }, []);
+  }, [receiverActive]);
 
   // Add wheel zoom handler (cursor-anchored zoom)
   // Zoom calculation keeps the point under the cursor stationary in canvas coordinates.
@@ -290,6 +295,25 @@ export default function LiveSim() {
     setVirusValues(VIRUS_DEFAULTS);
   };
 
+  // Handle data received from EarthDataReceiver via WebRTC
+  const handleEarthDataReceived = (uint8Array, frameNum) => {
+    // Validate size matches expected dimensions (1440 × 720 × 3)
+    if (uint8Array.length === BASE_W * BASE_H * 3) {
+      simBufRef.current = uint8Array;
+    } else {
+      console.warn(`Received frame ${frameNum} with unexpected size: ${uint8Array.length}`);
+    }
+  };
+
+  // Start/Pause handlers for WebRTC receiver
+  const handleStart = () => {
+    setReceiverActive(true);
+  };
+
+  const handlePause = () => {
+    setReceiverActive(false);
+  };
+
   return (
     <div className="live-sim-container">
       <div className="live-sim-status">
@@ -334,6 +358,8 @@ export default function LiveSim() {
               <ScreenControls
                 values={controls}
                 onChange={handleControlChange}
+                onStart={handleStart}
+                onPause={handlePause}
                 onScreenReset={resetView_Controls}
               />
             </div>
@@ -347,6 +373,23 @@ export default function LiveSim() {
           />
         </div>
       </div>
+
+      {receiverActive && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 1000,
+          maxWidth: '400px',
+          maxHeight: '500px',
+          overflow: 'auto',
+          background: 'white',
+          borderRadius: '10px',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+        }}>
+          <EarthDataReceiver onDataReceived={handleEarthDataReceived} />
+        </div>
+      )}
     </div>
   );
 }

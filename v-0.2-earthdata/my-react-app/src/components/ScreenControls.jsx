@@ -10,10 +10,10 @@ export default function ScreenControls(props) {
   } = props;
 
   const num = (v) => Number(v);
-//all of the sliders. we had repetitive structure to make the code more readable
-//The slider values initially are just what we thought looked the best, but the good thing is that the user can change everything to suit their needs
-//controls how the sim looks (dot size, pixelation, etc.)
-//completely finished part of the project! This doesn't need to connect to the backend.
+  //all of the sliders. we had repetitive structure to make the code more readable
+  //The slider values initially are just what we thought looked the best, but the good thing is that the user can change everything to suit their needs
+  //controls how the sim looks (dot size, pixelation, etc.)
+  //completely finished part of the project! This doesn't need to connect to the backend.
   return (
     <div className="controls-panel">
       <h3 className="controls-title">Visual Controls</h3>
@@ -98,7 +98,7 @@ export default function ScreenControls(props) {
       </div>
 
       <div className="controls-buttons">
-        <button className="control-btn" onClick={() => onStart && onStart()}>
+        <button className="control-btn" onClick={onStart}>
           Start
         </button>
         <button className="control-btn" onClick={onPause}>
@@ -109,6 +109,6 @@ export default function ScreenControls(props) {
         </button>
       </div>
     </div>
-    // the only button that works is the reset button, but others were added for the future when we add the actual simulation stuff.
+    // Start/Pause buttons now control the WebRTC EarthData receiver. Reset button resets visual controls.
   );
 }
