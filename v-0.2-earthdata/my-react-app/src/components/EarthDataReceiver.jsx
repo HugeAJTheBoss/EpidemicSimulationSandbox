@@ -10,6 +10,11 @@ const EarthDataReceiver = ({ onDataReceived }) => {
     const [logs, setLogs] = useState([]);
     const [frameStats, setFrameStats] = useState('');
 
+    // Log status changes to console as requested
+    useEffect(() => {
+        console.log(`[EarthDataReceiver] Status: ${status}`);
+    }, [status]);
+
     const signalingWsRef = useRef(null);
     const peerConnectionRef = useRef(null);
     const dataChannelRef = useRef(null);
@@ -38,7 +43,7 @@ const EarthDataReceiver = ({ onDataReceived }) => {
         if (arrayBuffer.byteLength !== expectedSize) {
             log(`⚠ Size mismatch! Expected ${expectedSize}, got ${arrayBuffer.byteLength}`);
         } else {
-            log(`✓ Size correct: ${arrayBuffer.byteLength} bytes`);
+            log(`Size correct: ${arrayBuffer.byteLength} bytes`);
         }
 
         // Call the callback if provided
@@ -55,7 +60,7 @@ const EarthDataReceiver = ({ onDataReceived }) => {
             a.download = 'received_earthdata.bin';
             a.click();
             URL.revokeObjectURL(url);
-            log('✓ First frame saved as received_earthdata.bin');
+            log('First frame saved as received_earthdata.bin');
         }
     }, [log, onDataReceived]);
 
@@ -92,7 +97,7 @@ const EarthDataReceiver = ({ onDataReceived }) => {
             }
         }
 
-        log(`✓ Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
+        log(`Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
         processEarthData(completeData.buffer, currentFrame);
 
         frameChunks.clear();
@@ -164,7 +169,7 @@ const EarthDataReceiver = ({ onDataReceived }) => {
             const state = peerConnectionRef.current.iceConnectionState;
             log(`ICE State Change: ${state}`);
             if (state === 'failed' || state === 'disconnected') {
-                setStatus('❌ Connection Failed (NAT/Firewall)');
+                setStatus('Connection Failed (NAT/Firewall)');
                 log('⚠️ Connection failed! Likely need a TURN server for this network.');
             }
         };
@@ -174,8 +179,8 @@ const EarthDataReceiver = ({ onDataReceived }) => {
             dataChannelRef.current.binaryType = 'arraybuffer';
 
             dataChannelRef.current.onopen = () => {
-                log('✓ Data channel opened! Receiving data...');
-                setStatus('✓ Receiving Data');
+                log('Data channel opened! Receiving data...');
+                setStatus('Receiving Data');
                 setStatusClass('connected');
             };
 
@@ -221,7 +226,7 @@ const EarthDataReceiver = ({ onDataReceived }) => {
         signalingWsRef.current = new WebSocket(serverUrl);
 
         signalingWsRef.current.onopen = () => {
-            log('✓ Connected to signaling server');
+            log('Connected to signaling server');
             setStatus('Waiting for sender...');
             setStatusClass('waiting');
         };
@@ -240,10 +245,10 @@ const EarthDataReceiver = ({ onDataReceived }) => {
                 log('Registered as receiver, waiting for sender...');
             } else if (data.type === 'waiting') {
                 log('Waiting for a sender to connect...');
-                setStatus('⏳ Waiting for sender...');
+                setStatus('Waiting for sender...');
             } else if (data.type === 'paired') {
                 peerIdRef.current = data.peerId;
-                log(`✓ Paired with sender: ${data.peerId}`);
+                log(`Paired with sender: ${data.peerId}`);
                 setStatus('Paired! Establishing connection...');
             } else if (data.type === 'offer') {
                 log('Received offer from sender');
@@ -257,12 +262,12 @@ const EarthDataReceiver = ({ onDataReceived }) => {
 
         signalingWsRef.current.onerror = (err) => {
             log('Signaling error - check server URL');
-            setStatus('❌ Connection error');
+            setStatus('Connection error');
         };
 
         signalingWsRef.current.onclose = () => {
             log('Disconnected from signaling server');
-            setStatus('❌ Disconnected');
+            setStatus('Disconnected');
 
             setTimeout(() => {
                 log('Attempting to reconnect...');
