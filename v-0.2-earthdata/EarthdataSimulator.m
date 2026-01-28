@@ -275,10 +275,9 @@ function runTick()
         sz = size(rgbData);
         scriptDir = fileparts(mfilename('fullpath'));
         
-        binFile = fullfile(scriptDir, 'backend', 'sim_frame.bin'); // TODO: CHANGE BACK TO EARTHDATA
-        fid = fopen(binFile, 'w');
-        fwrite(fid, permute(rgbData, [3 1 2]), 'uint8');  % RGB interleaved
-        fclose(fid);
+        % Write as PNG instead of raw binary
+        pngFile = fullfile(scriptDir, 'backend_2.0', 'sim_frame.png');
+        imwrite(rgbData, pngFile, 'png');
     end
     
     % Monitor ticks per second

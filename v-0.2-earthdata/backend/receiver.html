@@ -115,7 +115,7 @@
       signalingWs = new WebSocket(serverUrl);
 
       signalingWs.onopen = () => {
-        log('✓ Connected to signaling server');
+        log('Connected to signaling server');
         document.getElementById('status').textContent = 'Waiting for sender...';
         document.getElementById('status').className = 'status waiting';
       };
@@ -135,10 +135,10 @@
           log('Registered as receiver, waiting for sender...');
         } else if (data.type === 'waiting') {
           log('Waiting for a sender to connect...');
-          document.getElementById('status').textContent = '⏳ Waiting for sender...';
+          document.getElementById('status').textContent = 'Waiting for sender...';
         } else if (data.type === 'paired') {
           peerId = data.peerId;
-          log(`✓ Paired with sender: ${peerId}`);
+          log(`Paired with sender: ${peerId}`);
           document.getElementById('status').textContent = 'Paired! Establishing connection...';
         } else if (data.type === 'offer') {
           log('Received offer from sender');
@@ -152,12 +152,12 @@
 
       signalingWs.onerror = (err) => {
         log('Signaling error - check server URL');
-        document.getElementById('status').textContent = '❌ Connection error';
+        document.getElementById('status').textContent = 'Connection error';
       };
 
       signalingWs.onclose = () => {
         log('Disconnected from signaling server');
-        document.getElementById('status').textContent = '❌ Disconnected';
+        document.getElementById('status').textContent = 'Disconnected';
 
         // Auto-reconnect after 3 seconds
         setTimeout(() => {
@@ -177,8 +177,8 @@
         dataChannel.binaryType = 'arraybuffer';
 
         dataChannel.onopen = () => {
-          log('✓ Data channel opened! Receiving data...');
-          document.getElementById('status').textContent = '✓ Receiving Data';
+          log('Data channel opened! Receiving data...');
+          document.getElementById('status').textContent = 'Receiving Data';
           document.getElementById('status').className = 'status connected';
         };
 
@@ -300,7 +300,7 @@
         }
       }
 
-      log(`✓ Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
+      log(`Frame ${currentFrame}: ${totalSize.toLocaleString()} bytes complete`);
       processEarthData(completeData.buffer, currentFrame);
 
       // Clear for next frame
@@ -316,7 +316,7 @@
       if (arrayBuffer.byteLength !== expectedSize) {
         log(`⚠ Size mismatch! Expected ${expectedSize}, got ${arrayBuffer.byteLength}`);
       } else {
-        log(`✓ Size correct: ${arrayBuffer.byteLength} bytes`);
+        log(`Size correct: ${arrayBuffer.byteLength} bytes`);
       }
 
       // Example: Update your game world with this data
@@ -326,7 +326,7 @@
       // Save first frame to verify it works
       if (frameNum === 1) {
         downloadAsFile(arrayBuffer, 'received_earthdata.bin');
-        log('✓ First frame saved as received_earthdata.bin');
+        log('First frame saved as received_earthdata.bin');
       }
     }
 

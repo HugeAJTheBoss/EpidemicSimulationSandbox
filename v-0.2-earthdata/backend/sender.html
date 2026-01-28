@@ -101,7 +101,7 @@
 </head>
 
 <body>
-  <h1>🚀 EarthData Sender (Auto-Connect)</h1>
+  <h1>EarthData Sender (Auto-Connect)</h1>
 
   <div class="status" id="status">Ready to start</div>
 
@@ -120,8 +120,8 @@
   <div class="card">
     <h3>Controls</h3>
     <label>FPS: <input type="number" id="fpsInput" value="2" min="1" max="10" style="width:60px;"></label>
-    <button onclick="startSending()" id="sendBtn" disabled>▶ Start Sending</button>
-    <button onclick="stopSending()" id="stopBtn" disabled>⏸ Stop</button>
+    <button onclick="startSending()" id="sendBtn" disabled>Start Sending</button>
+    <button onclick="stopSending()" id="stopBtn" disabled>Stop</button>
   </div>
 
   <div id="log"></div>
@@ -133,7 +133,8 @@
     let myId = null;
     let peerId = null;
     let fileData = null;
-    let sendInterval = null;
+    let sendTimeout = null;
+    let sending = false;
     let frameCount = 0;
 
     const CHUNK_SIZE = 16384;
@@ -155,7 +156,7 @@
         fileData = event.target.result;
         const fileInfoDiv = document.getElementById('fileInfo');
         fileInfoDiv.style.display = 'block';
-        fileInfoDiv.innerHTML = `✓ Loaded: <strong>${file.name}</strong> (${(fileData.byteLength / 1024 / 1024).toFixed(2)} MB)`;
+        fileInfoDiv.innerHTML = `Loaded: <strong>${file.name}</strong> (${(fileData.byteLength / 1024 / 1024).toFixed(2)} MB)`;
         document.getElementById('connectBtn').disabled = false;
         log(`File loaded: ${fileData.byteLength} bytes`);
       };
@@ -177,7 +178,7 @@
       signalingWs = new WebSocket(serverUrl);
 
       signalingWs.onopen = () => {
-        log('✓ Connected to signaling server');
+        log('Connected to signaling server');
         document.getElementById('status').textContent = 'Looking for receiver...';
         document.getElementById('status').className = 'status waiting';
       };
@@ -197,24 +198,24 @@
           log('Registered as sender, waiting for receiver...');
         } else if (data.type === 'waiting') {
           log('Waiting for a receiver to connect...');
-          document.getElementById('status').textContent = '⏳ Waiting for receiver...';
+          document.getElementById('status').textContent = 'Waiting for receiver...';
         } else if (data.type === 'paired') {
           peerId = data.peerId;
-          log(`✓ Paired with receiver: ${peerId}`);
+          log(`Paired with receiver: ${peerId}`);
           document.getElementById('status').textContent = 'Paired! Creating connection...';
           await createConnection();
         } else if (data.type === 'answer') {
           await peerConnection.setRemoteDescription(data.payload);
-          log('✓ Received answer from receiver');
+          log('Received answer from receiver');
         } else if (data.type === 'ice-candidate') {
           await peerConnection.addIceCandidate(data.payload);
         }
       };
 
       signalingWs.onerror = (err) => {
-        log('❌ Signaling error - check server URL');
+        log('ERROR: Signaling error - check server URL');
         document.getElementById('connectBtn').disabled = false;
-        document.getElementById('status').textContent = '❌ Connection error';
+        document.getElementById('status').textContent = 'Connection error';
       };
 
       signalingWs.onclose = () => {
@@ -236,8 +237,8 @@
       dataChannel.binaryType = 'arraybuffer';
 
       dataChannel.onopen = () => {
-        log('✓ Data channel opened!');
-        document.getElementById('status').textContent = '✓ Connected - Ready to send';
+        log('Data channel opened!');
+        document.getElementById('status').textContent = 'Connected - Ready to send';
         document.getElementById('status').className = 'status connected';
         document.getElementById('sendBtn').disabled = false;
       };
@@ -283,54 +284,74 @@
         return;
       }
 
+      if (sending) {
+        log('Already sending!');
+        return;
+      }
+
       const fps = parseInt(document.getElementById('fpsInput').value) || 2;
-      const interval = 1000 / fps;
 
       frameCount = 0;
-      log(`▶ Starting to send at ${fps} fps (one frame every ${interval}ms)...`);
+      sending = true;
+      log(`Starting to send at ${fps} fps...`);
       document.getElementById('sendBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
-      document.getElementById('status').textContent = `📡 Broadcasting at ${fps} fps...`;
+      document.getElementById('status').textContent = `Broadcasting at ${fps} fps...`;
 
-      setTimeout(() => {
-        sendInterval = setInterval(async () => {
-          if (dataChannel.readyState !== 'open') {
-            log('Channel closed, stopping...');
-            stopSending();
-            return;
-          }
+      // Start the sequential sending loop
+      setTimeout(() => sendLoop(fps), 500);
+    }
 
-          frameCount++;
-          await sendFrameInChunks(frameCount);
-        }, interval);
-      }, 500);
+    async function sendLoop(fps) {
+      if (!sending) return;
+
+      if (dataChannel.readyState !== 'open') {
+        log('Channel closed, stopping...');
+        stopSending();
+        return;
+      }
+
+      const startTime = performance.now();
+      frameCount++;
+
+      try {
+        // Wait for the frame to finish sending before continuing
+        await sendFrameInChunks(frameCount);
+      } catch (err) {
+        log(`ERROR: Error sending frame ${frameCount}: ${err.message}`);
+        stopSending();
+        return;
+      }
+
+      const elapsed = performance.now() - startTime;
+      const targetInterval = 1000 / fps;
+      const delay = Math.max(0, targetInterval - elapsed);
+
+      // Schedule next frame
+      if (sending) {
+        sendTimeout = setTimeout(() => sendLoop(fps), delay);
+      }
     }
 
     async function sendFrameInChunks(frameNum) {
       const totalChunks = Math.ceil(fileData.byteLength / CHUNK_SIZE);
       let chunksSent = 0;
-      const MAX_BUFFER = 8 * 1024 * 1024; // Increase buffer to 8MB
+      const MAX_BUFFER = 4 * 1024 * 1024; // 4MB buffer threshold
 
       const startTime = performance.now();
 
       for (let offset = 0; offset < fileData.byteLength; offset += CHUNK_SIZE) {
-        // Wait if buffer is getting full, but with shorter delay
+        // Wait if buffer is getting full - give more time for buffer to drain
         while (dataChannel.bufferedAmount > MAX_BUFFER) {
-          await new Promise(resolve => setTimeout(resolve, 1)); // 1ms instead of 10ms
+          await new Promise(resolve => setTimeout(resolve, 10)); // 10ms to let event loop process
         }
 
         const chunk = fileData.slice(offset, Math.min(offset + CHUNK_SIZE, fileData.byteLength));
 
-        try {
-          const header = new Uint32Array([frameNum, chunksSent, totalChunks]);
-          dataChannel.send(header.buffer);
-          dataChannel.send(chunk);
-          chunksSent++;
-        } catch (err) {
-          log(`❌ Send error: ${err.message}`);
-          stopSending();
-          return;
-        }
+        const header = new Uint32Array([frameNum, chunksSent, totalChunks]);
+        dataChannel.send(header.buffer);
+        dataChannel.send(chunk);
+        chunksSent++;
       }
 
       const elapsed = (performance.now() - startTime).toFixed(0);
@@ -338,13 +359,16 @@
     }
 
     function stopSending() {
-      if (sendInterval) {
-        clearInterval(sendInterval);
-        sendInterval = null;
-        log('⏸ Stopped sending');
+      if (sending || sendTimeout) {
+        sending = false;
+        if (sendTimeout) {
+          clearTimeout(sendTimeout);
+          sendTimeout = null;
+        }
+        log('Stopped sending');
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('stopBtn').disabled = true;
-        document.getElementById('status').textContent = '✓ Connected - Ready to send';
+        document.getElementById('status').textContent = 'Connected - Ready to send';
       }
     }
   </script>
