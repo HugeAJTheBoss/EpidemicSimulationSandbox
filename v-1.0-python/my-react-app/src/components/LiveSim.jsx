@@ -10,7 +10,7 @@ import "../CSS/index.css";
 // - Polls a PNG frame (backend_2.0/sim_frame.png) and decodes it to access pixel data
 // - Handles zoom
 //   Has a virus panel (values are lifted into this component so they stay there when panels toggle and don't reset)
-export default function LiveSimNew() {
+export default function LiveSim() {
     const canvasRef = useRef(null);
 
     const simBufRef = useRef(null);
@@ -44,6 +44,7 @@ export default function LiveSimNew() {
     const [error, setError] = useState(null);
     const [openPanel, setOpenPanel] = useState(null);
     const [receiverActive, setReceiverActive] = useState(false);
+    const [connectionError, setConnectionError] = useState(false);
 
     const [controls, setControls] = useState({
         drawStep: 2,
@@ -197,10 +198,18 @@ export default function LiveSimNew() {
             pollAbortRef.current = ac;
 
             try {
-                const r = await fetch("/backend_2.0/sim_frame.png?cb=" + Date.now(), {
+                // Fetch directly from the middleware serving the backend file
+                const r = await fetch("/sim_frame.png?cb=" + Date.now(), {
                     signal: ac.signal,
                 });
-                if (!r.ok) return;
+
+
+
+                if (!r.ok) {
+                    setConnectionError(true);
+                    return;
+                }
+                setConnectionError(false);
 
                 const blob = await r.blob();
                 const imageUrl = URL.createObjectURL(blob);
@@ -210,10 +219,11 @@ export default function LiveSimNew() {
 
                 img.onload = () => {
                     const decoderCanvas = decoderCanvasRef.current;
-                    const decoderCtx = decoderCanvas.getContext("2d");
+                    const decoderCtx = decoderCanvas.getContext("2d", { willReadFrequently: true });
 
                     // Draw image to hidden canvas
                     decoderCtx.drawImage(img, 0, 0);
+
 
                     // Get pixel data - this gives us RGBA (4 bytes per pixel)
                     const imageData = decoderCtx.getImageData(0, 0, BASE_W, BASE_H);
@@ -230,9 +240,14 @@ export default function LiveSimNew() {
                 };
 
                 img.src = imageUrl;
-            } catch { }
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    setConnectionError(true);
+                }
+            }
             pollAbortRef.current = null;
         };
+
 
         // Only start polling if receiver is not active
         if (!receiverActive) {
@@ -357,7 +372,10 @@ export default function LiveSimNew() {
             <div className="live-sim-status">
                 {loading && <p className="live-sim-loading">Loading population data…</p>}
                 {error && <p className="live-sim-error">Error: {error}</p>}
+                {connectionError && <p className="live-sim-error">Backend connection failed. Ensure server is running on port 5001.</p>}
+
             </div>
+
 
             <div className="live-sim-row">
                 <div className={`live-sim-controls-wrapper left ${openPanel ? "expanded" : "collapsed"}`}>
