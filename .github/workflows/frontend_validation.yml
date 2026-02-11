@@ -1,0 +1,26 @@
+name: Frontend Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  frontend-check:
+    name: Validate Frontend Files
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Check HTML syntax
+        run: |
+          # Install HTML validator
+          sudo apt-get update
+          sudo apt-get install -y tidy
+          
+          # Validate HTML files
+          find v-1.0-python/my-react-app -name "*.html" -exec tidy -q -e {} \; || true

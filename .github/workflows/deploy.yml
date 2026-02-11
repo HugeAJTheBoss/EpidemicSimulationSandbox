@@ -1,0 +1,46 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Wait for CI checks to complete
+  wait-for-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Frontend Check
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'Validate Frontend Files'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+      
+      - name: Wait for Backend Check
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'Test Backend Python Code'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+      
+      - name: Wait for Lint Check
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'Lint Python Code'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: wait-for-checks
+    environment: production
+    
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          echo "Deploy triggered to Render"

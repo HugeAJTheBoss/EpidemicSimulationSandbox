@@ -40,7 +40,7 @@ def simulation_loop():
 
 @app.route('/')
 def index():
-    return send_file('../my-react-app/index.html')
+    return send_file('../../my-react-app/index.html')
 
 @app.route('/sim_frame.png')
 def get_frame():
