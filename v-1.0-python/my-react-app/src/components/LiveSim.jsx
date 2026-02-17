@@ -221,8 +221,8 @@ export default function LiveSim() {
                     const decoderCanvas = decoderCanvasRef.current;
                     const decoderCtx = decoderCanvas.getContext("2d", { willReadFrequently: true });
 
-                    // Draw image to hidden canvas
-                    decoderCtx.drawImage(img, 0, 0);
+                    // Draw image to hidden canvas, scaling to BASE dimensions
+                    decoderCtx.drawImage(img, 0, 0, BASE_W, BASE_H);
 
 
                     // Get pixel data - this gives us RGBA (4 bytes per pixel)
