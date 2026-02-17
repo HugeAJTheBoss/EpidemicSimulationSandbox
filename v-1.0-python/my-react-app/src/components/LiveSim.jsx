@@ -225,6 +225,7 @@ export default function LiveSim() {
                     decoderCtx.drawImage(img, 0, 0, BASE_W, BASE_H);
 
 
+
                     // Get pixel data - this gives us RGBA (4 bytes per pixel)
                     const imageData = decoderCtx.getImageData(0, 0, BASE_W, BASE_H);
 
