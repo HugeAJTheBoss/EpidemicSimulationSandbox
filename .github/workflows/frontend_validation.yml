@@ -1,16 +1,17 @@
 name: Frontend Validation
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+  push:
+    branches:
+      - main
 
 jobs:
   frontend-check:
     name: Validate Frontend Files
     runs-on: ubuntu-latest
-    environment: production
     
     steps:
       - name: Checkout code

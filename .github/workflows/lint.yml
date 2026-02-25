@@ -1,16 +1,17 @@
 name: Code Quality Check
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+  push:
+    branches:
+      - main
 
 jobs:
   lint-check:
     name: Lint Python Code
     runs-on: ubuntu-latest
-    environment: production
     
     steps:
       - name: Checkout code
