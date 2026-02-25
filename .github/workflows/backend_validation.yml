@@ -10,7 +10,6 @@ jobs:
   backend-test:
     name: Test Backend Python Code
     runs-on: ubuntu-latest
-    environment: production
     
     steps:
       - name: Checkout code
