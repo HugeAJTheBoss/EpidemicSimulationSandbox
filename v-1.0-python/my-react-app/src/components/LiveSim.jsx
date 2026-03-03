@@ -145,7 +145,9 @@ export default function LiveSim() {
                 // iterate over the downsampled grid and draw a colored circle where population exists
                 for (let y = 0; y < BASE_H; y += step) {
                     for (let x = 0; x < BASE_W; x += step) {
-                        const idx = y * BASE_W + x;
+                        const ix = Math.round(x);
+                        const iy = Math.round(y);
+                        const idx = iy * BASE_W + ix;
                         const p = pop[idx];
                         if (!p) continue;
 
@@ -159,7 +161,7 @@ export default function LiveSim() {
                         const o = idx * 4;
                         ctx.fillStyle = `rgb(${sim[o]},${sim[o + 1]},${sim[o + 2]})`;
                         ctx.beginPath();
-                        ctx.arc(x + 0.5, y + 0.5, r, 0, Math.PI * 2);
+                        ctx.arc(ix + 0.5, iy + 0.5, r, 0, Math.PI * 2);
                         ctx.fill();
                     }
                 }
@@ -324,10 +326,10 @@ export default function LiveSim() {
         const d = {
             drawStep: 2,
             globalMultiplier: 1,
-            compressExp: 0.7,
+            compressExp: 0.6,
             percentileCap: 0.95,
             minRadius: 0.1,
-            maxRadius: 0.9,
+            maxRadius: 1,
         };
 
         setControls(d);

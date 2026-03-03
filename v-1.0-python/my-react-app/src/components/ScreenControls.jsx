@@ -27,7 +27,7 @@ export default function ScreenControls(props) {
           type="range"
           min="1"
           max="8"
-          step="1"
+          step="0.1"
           value={values.drawStep}
           onChange={(e) => onChange("drawStep", num(e.target.value))}
         />
