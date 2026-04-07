@@ -1,0 +1,21 @@
+
+> my-react-app@0.0.0 dev
+> vite
+
+
+  VITE v7.1.11  ready in 93 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+Request for /sim_frame.png
+12:13:38 PM [vite] vite.config.js changed, restarting server...
+12:13:38 PM [vite] (client) Re-optimizing dependencies because vite config has changed
+12:13:38 PM [vite] server restarted.
+12:14:03 PM [vite] vite.config.js changed, restarting server...
+12:14:03 PM [vite] (client) Re-optimizing dependencies because vite config has changed
+12:14:03 PM [vite] server restarted.
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+Request for /sim_frame.png
+Request for /sim_frame.png
+Request for /sim_frame.png
