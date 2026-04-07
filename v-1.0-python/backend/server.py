@@ -67,7 +67,6 @@ def init_simulation(force=False):
 
 
 def simulation_loop():
-    global running
     while running:
         try:
             with sim_lock:
