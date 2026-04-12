@@ -8,8 +8,6 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = BASE_DIR.parent
-FRONTEND_DIST_DIR = PROJECT_DIR / 'my-react-app' / 'dist'
-FRONTEND_INDEX_PATH = FRONTEND_DIST_DIR / 'index.html'
 SIM_FRAME_PATH = BASE_DIR / 'sim_frame.png'
 GEOTIFF_PATH = PROJECT_DIR / 'gpw_v4_population_density_rev11_2020_15_min.tif'
 
@@ -98,36 +96,29 @@ def ensure_simulation_thread():
         print('Simulation thread started.')
 
 
-def _simulation_error_response(exc):
+@app.route('/')
+def index():
     return jsonify({
-        'status': 'error',
         'service': 'epidemic-simulation-backend',
-        'message': str(exc),
-    }), 500
+        'status': 'ok',
+        'message': 'Use /health, /sim_frame.png, and /api/run to control the simulation.',
+    })
 
 
 @app.route('/health')
 def health():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
-
+    ensure_simulation_thread()
     with sim_lock:
         return jsonify({
             'status': 'ok',
-            'service': 'epidemic-simulation-backend',
-            'frontendBuilt': FRONTEND_INDEX_PATH.exists(),
             'simulation': _state_summary(sim),
+            'frame_path': str(SIM_FRAME_PATH.name),
         })
 
 
 @app.route('/sim_frame.png')
 def get_frame():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
+    ensure_simulation_thread()
 
     with sim_lock:
         if not SIM_FRAME_PATH.exists() and sim:
@@ -141,21 +132,14 @@ def get_frame():
 
 @app.route('/api/state')
 def state():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
-
+    ensure_simulation_thread()
     with sim_lock:
         return jsonify(_state_summary(sim))
 
 
 @app.route('/api/run', methods=['POST'])
 def run_steps():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
+    ensure_simulation_thread()
 
     payload = request.get_json(silent=True) or {}
     try:
@@ -180,11 +164,7 @@ def run_steps():
 
 @app.route('/pause', methods=['POST'])
 def pause():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
-
+    ensure_simulation_thread()
     with sim_lock:
         sim.pause()
     return jsonify({'status': 'paused'})
@@ -192,11 +172,7 @@ def pause():
 
 @app.route('/play', methods=['POST'])
 def play():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
-
+    ensure_simulation_thread()
     with sim_lock:
         sim.play()
     return jsonify({'status': 'playing'})
@@ -204,11 +180,7 @@ def play():
 
 @app.route('/vaccinate', methods=['POST'])
 def vaccinate():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
-
+    ensure_simulation_thread()
     with sim_lock:
         sim.vaccinate()
         sim.save_frame(str(SIM_FRAME_PATH))
@@ -217,38 +189,12 @@ def vaccinate():
 
 @app.route('/restart', methods=['POST'])
 def restart_sim():
-    try:
-        ensure_simulation_thread()
-    except Exception as exc:
-        return _simulation_error_response(exc)
-
+    ensure_simulation_thread()
     with sim_lock:
         sim.restart()
         sim.play()
         sim.save_frame(str(SIM_FRAME_PATH))
     return jsonify({'status': 'restarted'})
-
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_frontend(path):
-    # Keep unknown API-like paths as proper 404s.
-    if path.startswith('api/'):
-        return jsonify({'error': 'Not found'}), 404
-
-    if path:
-        requested_path = FRONTEND_DIST_DIR / path
-        if requested_path.exists() and requested_path.is_file():
-            return send_file(str(requested_path), max_age=0)
-
-    if FRONTEND_INDEX_PATH.exists():
-        return send_file(str(FRONTEND_INDEX_PATH), max_age=0)
-
-    return jsonify({
-        'service': 'epidemic-simulation-backend',
-        'status': 'ok',
-        'message': 'Frontend build not found. Build my-react-app so dist/index.html exists.',
-    })
 
 
 if __name__ == '__main__':
