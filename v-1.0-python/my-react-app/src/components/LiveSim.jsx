@@ -5,6 +5,8 @@ import VirusControls, { DEFAULTS as VIRUS_DEFAULTS } from "./VirusControls";
 import EarthDataReceiver from "./EarthDataReceiver";
 import "../CSS/index.css";
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
 // LiveSimNew: variant of LiveSim that uses PNG frames instead of binary frames
 // - Takes the population geotiff file and turns it into a visual (dots are multiplied by population to get size).
 // - Polls a PNG frame (backend_2.0/sim_frame.png) and decodes it to access pixel data
@@ -199,7 +201,8 @@ export default function LiveSim() {
 
             try {
                 // Fetch directly from the middleware serving the backend file
-                const r = await fetch("/sim_frame.png?cb=" + Date.now(), {
+                const frameUrl = `${API_BASE_URL}/sim_frame.png?cb=${Date.now()}`;
+                const r = await fetch(frameUrl, {
                     signal: ac.signal,
                 });
 
