@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
+const DEFAULT_SERVER_URL = import.meta.env.VITE_API_BASE_URL || 'https://epidemicsimulationsandbox.onrender.com';
+
 const EarthDataReceiver = ({ onDataReceived }) => {
     const [status, setStatus] = useState('Connecting...');
     const [statusClass, setStatusClass] = useState('');
-    const [serverUrl, setServerUrl] = useState('https://epidemicsimulationsandbox.onrender.com');
+    const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
     const [turnUrl, setTurnUrl] = useState('');
     const [turnUser, setTurnUser] = useState('');
     const [turnPass, setTurnPass] = useState('');

@@ -26,4 +26,7 @@ v-1.0-python/my-react-app/dist/
 # Runtime artifacts
 v-1.0-python/backend/sim_frame.png
 *.log
-npm-debug.log* 
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
