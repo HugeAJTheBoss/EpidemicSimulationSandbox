@@ -4,6 +4,7 @@ export default function ScreenControls(props) {
   const {
     values,
     onChange,
+    onSpeedChange,
     onStart,
     onPause,
     onScreenReset,
@@ -17,6 +18,25 @@ export default function ScreenControls(props) {
   return (
     <div className="controls-panel">
       <h3 className="controls-title">Visual Controls</h3>
+
+      <div className="control-group">
+        <label className="control-label">
+          Sim Speed: {values.simSpeed.toFixed(1)}x
+        </label>
+        <input
+          className="control-slider"
+          type="range"
+          min="0.1"
+          max="10"
+          step="0.1"
+          value={values.simSpeed}
+          onChange={(e) => {
+            const v = num(e.target.value);
+            onChange("simSpeed", v);
+            if (onSpeedChange) onSpeedChange(v);
+          }}
+        />
+      </div>
 
       <div className="control-group">
         <label className="control-label">

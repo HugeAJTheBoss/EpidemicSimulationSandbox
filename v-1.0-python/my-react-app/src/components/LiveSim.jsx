@@ -7,6 +7,29 @@ import "../CSS/index.css";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
+function resolveApiBase() {
+    if (API_BASE_URL) return API_BASE_URL;
+    // In Vite dev, backend is proxied under /backend_2.0.
+    if (typeof window !== "undefined" && window.location.port === "5173") {
+        return "/backend_2.0";
+    }
+    return "";
+}
+
+async function postApi(endpoint, body = null) {
+    const base = resolveApiBase();
+    const opts = { method: "POST" };
+    if (body) {
+        opts.headers = { "Content-Type": "application/json" };
+        opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(`${base}${endpoint}`, opts);
+    if (!res.ok) {
+        throw new Error(`POST ${endpoint} failed (${res.status})`);
+    }
+    return await res.json();
+}
+
 // LiveSimNew: variant of LiveSim that uses PNG frames instead of binary frames
 // - Takes the population geotiff file and turns it into a visual (dots are multiplied by population to get size).
 // - Polls a PNG frame (backend_2.0/sim_frame.png) and decodes it to access pixel data
@@ -49,6 +72,7 @@ export default function LiveSim() {
     const [connectionError, setConnectionError] = useState(false);
 
     const [controls, setControls] = useState({
+        simSpeed: 1,
         drawStep: 2,
         globalMultiplier: 1,
         compressExp: 0.7,
@@ -318,6 +342,14 @@ export default function LiveSim() {
         }
     };
 
+    const handleSpeedChange = async (speed) => {
+        try {
+            await postApi("/api/speed", { speed });
+        } catch (err) {
+            console.error("Failed to update simulation speed:", err);
+        }
+    };
+
     // resetView_Controls: restore display-related parameters to sensible defaults (will be fine tuned in the future)
     // Note: we update both UI state and internal refs used by the renderer.
     const resetView_Controls = () => {
@@ -325,6 +357,7 @@ export default function LiveSim() {
         offsetRef.current = { x: 0, y: 0 };
 
         const d = {
+            simSpeed: 1,
             drawStep: 2,
             globalMultiplier: 1,
             compressExp: 0.7,
@@ -340,6 +373,8 @@ export default function LiveSim() {
         percentileCapRef.current = d.percentileCap;
         minRadiusRef.current = d.minRadius;
         maxRadiusRef.current = d.maxRadius;
+
+        handleSpeedChange(d.simSpeed);
     };
 
     // virus handlers: simple setters lifted up so values persist across panel toggles
@@ -418,6 +453,7 @@ export default function LiveSim() {
                             <ScreenControls
                                 values={controls}
                                 onChange={handleControlChange}
+                                onSpeedChange={handleSpeedChange}
                                 onStart={handleStart}
                                 onPause={handlePause}
                                 onScreenReset={resetView_Controls}
