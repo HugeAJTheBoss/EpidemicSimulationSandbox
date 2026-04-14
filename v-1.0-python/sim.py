@@ -34,8 +34,15 @@ class VirusSimulation:
         self.ROWS, self.COLS = data.shape
         print(f"Data shape: {self.ROWS} x {self.COLS}")
         
-        # Replace NaN with 0
-        data_clean = np.nan_to_num(data, nan=0.0).astype(self.dtype, copy=False)
+        # Sanitize raster values: remove non-finite values and clamp negatives.
+        # Some GeoTIFFs use negative nodata sentinels, which would produce NaN in sqrt.
+        data_clean = np.nan_to_num(
+            data,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        ).astype(self.dtype, copy=False)
+        data_clean = np.maximum(data_clean, 0)
         
         # Create sizeGrid
         size_grid = np.sqrt(data_clean).astype(self.dtype, copy=False)
@@ -138,10 +145,18 @@ class VirusSimulation:
             boundary='fill',
             fillvalue=0
         ).astype(self.dtype, copy=False)
+        neighbor_sum = np.nan_to_num(
+            neighbor_sum,
+            nan=0.0,
+            posinf=np.finfo(self.dtype).max,
+            neginf=0.0,
+        )
         
         # Calculate transitions
         infected = self.SPREAD_RATE * neighbor_sum / (1 + 3 * neighbor_sum) * self.g
         dead = self.FATALITY_RATE * healed
+        infected = np.nan_to_num(infected, nan=0.0, posinf=0.0, neginf=0.0)
+        dead = np.nan_to_num(dead, nan=0.0, posinf=0.0, neginf=0.0)
         
         # Update compartments
         self.g = np.maximum(np.minimum(self.g - infected + relapsed, 1), 0)
@@ -195,6 +210,7 @@ class VirusSimulation:
         else:
             rgb_normalized = rgb_data
         
+        rgb_normalized = np.nan_to_num(rgb_normalized, nan=0.0, posinf=1.0, neginf=0.0)
         rgb_uint8 = (rgb_normalized * 255).astype(np.uint8)
         
         # Create and save image

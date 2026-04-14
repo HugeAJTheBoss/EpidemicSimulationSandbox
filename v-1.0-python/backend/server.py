@@ -25,6 +25,10 @@ CORS(app)
 sim = None
 sim_thread = None
 running = False
+sim_speed = 1.0
+tick_budget = 0.0
+last_loop_time = None
+BASE_TPS = 30.0
 
 sim_lock = threading.Lock()
 thread_lock = threading.Lock()
@@ -34,6 +38,7 @@ def _state_summary(sim_obj):
     return {
         'iteration': sim_obj.iter,
         'paused': sim_obj.paused,
+        'speed': sim_speed,
         'totals': {
             'susceptible': float(sim_obj.g.sum()),
             'exposed': float(sim_obj.e.sum()),
@@ -69,19 +74,39 @@ def init_simulation(force=False):
 
 
 def simulation_loop():
+    global tick_budget, last_loop_time
     while running:
         try:
             with sim_lock:
                 if sim and not sim.paused:
-                    sim.run_tick()
+                    now = time.time()
+                    if last_loop_time is None:
+                        last_loop_time = now
+
+                    dt = now - last_loop_time
+                    last_loop_time = now
+
+                    # Avoid a huge catch-up burst after pauses or debugger stops.
+                    dt = max(0.0, min(dt, 0.25))
+
+                    speed_now = max(0.1, float(sim_speed))
+                    tick_budget += dt * BASE_TPS * speed_now
+
+                    # Cap work per loop to keep rendering responsive.
+                    ticks_to_run = min(int(tick_budget), 10)
+                    for _ in range(ticks_to_run):
+                        sim.run_tick()
+                    tick_budget -= ticks_to_run
 
                     # Save frame every 5 iterations for frontend polling.
                     if sim.iter % 5 == 0:
                         sim.save_frame(str(SIM_FRAME_PATH))
+                else:
+                    last_loop_time = time.time()
         except Exception as exc:
             print(f'Error in simulation loop: {exc}')
 
-        time.sleep(0.001)
+        time.sleep(0.005)
 
 
 def ensure_simulation_thread():
@@ -155,6 +180,30 @@ def run_steps():
         summary = _state_summary(sim)
 
     return jsonify({'status': 'ran', 'steps': steps, 'simulation': summary})
+
+
+@app.route('/api/speed', methods=['POST'])
+def set_speed():
+    """Set simulation speed multiplier.
+    1.0 is baseline speed, 2.0 is ~2x faster, 0.5 is ~half speed."""
+    global sim_speed, tick_budget
+    ensure_simulation_thread()
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        new_speed = float(payload.get('speed', 1.0))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'speed must be a number'}), 400
+
+    # Keep speed in a safe range to avoid runaway CPU load.
+    new_speed = max(0.1, min(new_speed, 5.0))
+
+    with sim_lock:
+        sim_speed = new_speed
+        tick_budget = 0.0
+        summary = _state_summary(sim)
+
+    return jsonify({'status': 'speed_updated', 'speed': new_speed, 'simulation': summary})
 
 
 @app.route('/pause', methods=['POST'])
